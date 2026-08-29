@@ -207,11 +207,12 @@ async function updateSiteStatusWithTest(source) {
     if (cachedResult) {
         try {
             const { isAvailable, timestamp } = JSON.parse(cachedResult);
-            // 缓存有效期为2个月
-            if (Date.now() - timestamp < 5184000000) {
+            // 只复用短期内成功的结果；失败结果不能长期阻塞用户切换数据源。
+            if (isAvailable && Date.now() - timestamp < SITE_STATUS_CACHE_EXPIRY) {
                 updateSiteStatus(isAvailable);
                 return;
             }
+            localStorage.removeItem(cacheKey);
         } catch (e) {
             // 忽略解析错误，继续测试
             console.error('缓存数据解析错误:', e);
@@ -221,7 +222,7 @@ async function updateSiteStatusWithTest(source) {
     // 使用 Promise.race 添加超时处理
     try {
         const timeoutPromise = new Promise((_, reject) => 
-            setTimeout(() => reject(new Error('测试超时')), 8000)
+            setTimeout(() => reject(new Error('测试超时')), SITE_STATUS_TEST_TIMEOUT + 1000)
         );
         
         const testPromise = testSiteAvailability(source);
@@ -230,11 +231,15 @@ async function updateSiteStatusWithTest(source) {
         // 更新UI状态
         updateSiteStatus(isAvailable);
         
-        // 缓存测试结果
-        localStorage.setItem(cacheKey, JSON.stringify({
-            isAvailable,
-            timestamp: Date.now()
-        }));
+        // 只缓存成功结果，避免一次网络抖动让站点长期显示不可用。
+        if (isAvailable) {
+            localStorage.setItem(cacheKey, JSON.stringify({
+                isAvailable: true,
+                timestamp: Date.now()
+            }));
+        } else {
+            localStorage.removeItem(cacheKey);
+        }
     } catch (error) {
         console.error('站点测试错误:', error);
         updateSiteStatus(false);

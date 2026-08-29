@@ -738,11 +738,17 @@ async function testSiteAvailability(source) {
             return false;
         }
         
-        // 使用更简单的测试查询
-        const response = await fetch('/api/search?wd=test' + apiParams, {
-            // 添加超时
-            signal: AbortSignal.timeout(5000)
-        });
+        // 公共代理响应可能超过 5 秒，使用可控超时避免误报。
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), SITE_STATUS_TEST_TIMEOUT);
+        let response;
+        try {
+            response = await fetch('/api/search?wd=test' + apiParams, {
+                signal: controller.signal
+            });
+        } finally {
+            clearTimeout(timeoutId);
+        }
         
         // 检查响应状态
         if (!response.ok) {
