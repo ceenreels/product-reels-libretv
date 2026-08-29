@@ -1,6 +1,10 @@
 // 全局常量配置
 
-const PROXY_URL = 'https://cors.zme.ink/';
+// Jina Reader 提供带 CORS 的只读代理，适用于 GitHub Pages 静态部署。
+// 目标 URL 会在请求处进行 encodeURIComponent 处理。
+const PROXY_URL = 'https://r.jina.ai/';
+const DEFAULT_API_SOURCE = 'ffzy';
+const API_REQUEST_TIMEOUT = 30000;
 const HOPLAYER_URL = 'https://hoplayer.com/index.html';
 const SEARCH_HISTORY_KEY = 'videoSearchHistory';
 const MAX_HISTORY_ITEMS = 5;
@@ -83,6 +87,10 @@ const API_CONFIG = {
             'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
             'Accept': 'application/json'
         }
+    },
+    recommendations: {
+        // 苹果CMS列表接口，用于首页热门推荐
+        path: '/api.php/provide/vod/?ac=list&pg='
     }
 };
 

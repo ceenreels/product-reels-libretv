@@ -54,8 +54,8 @@
                 <label class="block text-sm font-medium text-gray-400 mb-2">选择采集站点</label>
                 <select id="apiSource" class="w-full bg-[#222] border border-[#333] text-white px-3 py-2 rounded-lg focus:outline-none focus:border-white transition-colors">
                     <option value="aggregated">聚合搜索 (所有源)</option>
-                    <option value="heimuer" selected>黑木耳影视 (heimuer)</option>
-                    <option value="ffzy">非凡影视 (ffzy)</option>
+                    <option value="heimuer">黑木耳影视 (heimuer)</option>
+                    <option value="ffzy" selected>非凡影视 (ffzy)</option>
                     <option value="tyyszy">天涯资源 (tyyszy)</option>
                     <option value="ckzy">CK资源 (ckzy)</option>
                     <option value="zy360">360资源 (zy360)</option>
@@ -156,6 +156,23 @@
                     </div>
                 </div>
             </div>
+
+            <!-- 首页热门推荐 -->
+            <section id="recommendationArea" class="w-full max-w-7xl mx-auto mt-8 mb-10">
+                <div class="flex items-center justify-between mb-4">
+                    <div>
+                        <h2 class="text-xl font-bold gradient-text">热门推荐</h2>
+                        <p class="text-xs text-gray-500 mt-1">来自当前视频源的最新内容</p>
+                    </div>
+                    <button type="button" onclick="recommendationPage++; loadRecommendations()"
+                            class="text-sm text-gray-400 hover:text-white transition-colors">
+                        换一批
+                    </button>
+                </div>
+                <div id="recommendationResults" class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-4">
+                    <div class="col-span-full text-center text-gray-500 py-8">推荐内容加载中...</div>
+                </div>
+            </section>
             
             <!-- 搜索结果：初始隐藏 -->
             <div id="resultsArea" class="w-full hidden">

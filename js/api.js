@@ -1,7 +1,65 @@
+// 解析代理返回的JSON。Jina Reader 在 application/json 请求下会把原始
+// 响应放进 data.content，并且部分 CMS 文本中的控制字符可能未被转义。
+function repairJsonControlCharacters(value) {
+    let result = '';
+    let inString = false;
+    let escaped = false;
+
+    for (const char of value) {
+        if (inString) {
+            if (escaped) {
+                result += char;
+                escaped = false;
+            } else if (char === '\\') {
+                result += char;
+                escaped = true;
+            } else if (char === '"') {
+                result += char;
+                inString = false;
+            } else if (char.charCodeAt(0) < 32) {
+                const escapes = { '\n': '\\n', '\r': '\\r', '\t': '\\t', '\b': '\\b', '\f': '\\f' };
+                result += escapes[char] || `\\u${char.charCodeAt(0).toString(16).padStart(4, '0')}`;
+            } else {
+                result += char;
+            }
+        } else {
+            result += char;
+            if (char === '"') inString = true;
+        }
+    }
+
+    return result;
+}
+
+function parseJsonPayload(value) {
+    if (typeof value !== 'string') return value;
+    const text = value.trim();
+    try {
+        return JSON.parse(text);
+    } catch (error) {
+        return JSON.parse(repairJsonControlCharacters(text));
+    }
+}
+
+async function readApiResponse(response) {
+    const raw = await response.text();
+    const payload = parseJsonPayload(raw);
+
+    if (payload && payload.data && typeof payload.data.content === 'string') {
+        return parseJsonPayload(payload.data.content);
+    }
+
+    return payload;
+}
+
+function buildProxyUrl(targetUrl) {
+    return `${PROXY_URL}${encodeURIComponent(targetUrl)}`;
+}
+
 // 改进的API请求处理函数
 async function handleApiRequest(url) {
     const customApi = url.searchParams.get('customApi') || '';
-    const source = url.searchParams.get('source') || 'heimuer';
+    const source = url.searchParams.get('source') || DEFAULT_API_SOURCE;
     const multipleApis = url.searchParams.get('multipleApis') === 'true';
     
     try {
@@ -36,10 +94,10 @@ async function handleApiRequest(url) {
             
             // 添加超时处理
             const controller = new AbortController();
-            const timeoutId = setTimeout(() => controller.abort(), 10000);
+            const timeoutId = setTimeout(() => controller.abort(), API_REQUEST_TIMEOUT);
             
             try {
-                const response = await fetch(PROXY_URL + encodeURIComponent(apiUrl), {
+                const response = await fetch(buildProxyUrl(apiUrl), {
                     headers: API_CONFIG.search.headers,
                     signal: controller.signal
                 });
@@ -50,7 +108,7 @@ async function handleApiRequest(url) {
                     throw new Error(`API请求失败: ${response.status}`);
                 }
                 
-                const data = await response.json();
+                const data = await readApiResponse(response);
                 
                 // 检查JSON格式的有效性
                 if (!data || !Array.isArray(data.list)) {
@@ -70,6 +128,47 @@ async function handleApiRequest(url) {
                 return JSON.stringify({
                     code: 200,
                     list: data.list || [],
+                });
+            } catch (fetchError) {
+                clearTimeout(timeoutId);
+                throw fetchError;
+            }
+        }
+
+        if (url.pathname === '/api/recommendations') {
+            const requestedSource = url.searchParams.get('source') || DEFAULT_API_SOURCE;
+            const sourceCode = API_SITES[requestedSource] ? requestedSource : DEFAULT_API_SOURCE;
+            const page = Math.max(1, Number.parseInt(url.searchParams.get('page') || '1', 10) || 1);
+            const detailUrl = `${API_SITES[sourceCode].api}${API_CONFIG.recommendations.path}${page}`;
+
+            const controller = new AbortController();
+            const timeoutId = setTimeout(() => controller.abort(), API_REQUEST_TIMEOUT);
+
+            try {
+                const response = await fetch(buildProxyUrl(detailUrl), {
+                    headers: API_CONFIG.search.headers,
+                    signal: controller.signal
+                });
+
+                clearTimeout(timeoutId);
+
+                if (!response.ok) {
+                    throw new Error(`推荐请求失败: ${response.status}`);
+                }
+
+                const data = await readApiResponse(response);
+                if (!data || !Array.isArray(data.list)) {
+                    throw new Error('推荐接口返回的数据格式无效');
+                }
+
+                data.list.forEach(item => {
+                    item.source_name = API_SITES[sourceCode].name;
+                    item.source_code = sourceCode;
+                });
+
+                return JSON.stringify({
+                    code: 200,
+                    list: data.list
                 });
             } catch (fetchError) {
                 clearTimeout(timeoutId);
@@ -100,26 +199,16 @@ async function handleApiRequest(url) {
                 throw new Error('无效的API来源');
             }
 
-            // 对于特殊源，使用特殊处理方式
-            if (sourceCode === 'ffzy' && API_SITES[sourceCode].detail) {
-                return await handleFFZYDetail(id, sourceCode);
-            }
-            
-            // 新增: 对极速资源使用特殊处理方式
-            if (sourceCode === 'jisu' && API_SITES[sourceCode].detail) {
-                return await handleJisuDetail(id, sourceCode);
-            }
-
             const detailUrl = customApi
                 ? `${customApi}${API_CONFIG.detail.path}${id}`
                 : `${API_SITES[sourceCode].api}${API_CONFIG.detail.path}${id}`;
             
             // 添加超时处理
             const controller = new AbortController();
-            const timeoutId = setTimeout(() => controller.abort(), 10000);
+        const timeoutId = setTimeout(() => controller.abort(), API_REQUEST_TIMEOUT);
             
             try {
-                const response = await fetch(PROXY_URL + encodeURIComponent(detailUrl), {
+                const response = await fetch(buildProxyUrl(detailUrl), {
                     headers: API_CONFIG.detail.headers,
                     signal: controller.signal
                 });
@@ -131,7 +220,7 @@ async function handleApiRequest(url) {
                 }
                 
                 // 由于现在返回的是JSON而不是HTML，我们需要解析JSON
-                const data = await response.json();
+                const data = await readApiResponse(response);
                 
                 // 检查返回的数据是否有效
                 if (!data || !data.list || !Array.isArray(data.list) || data.list.length === 0) {
@@ -214,7 +303,7 @@ async function handleFFZYDetail(id, sourceCode) {
         
         // 添加超时处理
         const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 10000);
+        const timeoutId = setTimeout(() => controller.abort(), API_REQUEST_TIMEOUT);
         
         // 获取详情页HTML
         const response = await fetch(PROXY_URL + encodeURIComponent(detailUrl), {
@@ -288,7 +377,7 @@ async function handleJisuDetail(id, sourceCode) {
         
         // 添加超时处理
         const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 10000);
+        const timeoutId = setTimeout(() => controller.abort(), API_REQUEST_TIMEOUT);
         
         // 获取详情页HTML
         const response = await fetch(PROXY_URL + encodeURIComponent(detailUrl), {
@@ -363,7 +452,7 @@ async function handleAggregatedSearch(searchQuery) {
                 setTimeout(() => reject(new Error(`${source}源搜索超时`)), 8000)
             );
             
-            const fetchPromise = fetch(PROXY_URL + encodeURIComponent(apiUrl), {
+            const fetchPromise = fetch(buildProxyUrl(apiUrl), {
                 headers: API_CONFIG.search.headers
             });
             
@@ -373,7 +462,7 @@ async function handleAggregatedSearch(searchQuery) {
                 throw new Error(`${source}源请求失败: ${response.status}`);
             }
             
-            const data = await response.json();
+            const data = await readApiResponse(response);
             
             if (!data || !Array.isArray(data.list)) {
                 throw new Error(`${source}源返回的数据格式无效`);
@@ -472,7 +561,7 @@ async function handleMultipleCustomSearch(searchQuery, customApiUrls) {
                 setTimeout(() => reject(new Error(`自定义API ${index+1} 搜索超时`)), 8000)
             );
             
-            const fetchPromise = fetch(PROXY_URL + encodeURIComponent(fullUrl), {
+            const fetchPromise = fetch(buildProxyUrl(fullUrl), {
                 headers: API_CONFIG.search.headers
             });
             
@@ -482,7 +571,7 @@ async function handleMultipleCustomSearch(searchQuery, customApiUrls) {
                 throw new Error(`自定义API ${index+1} 请求失败: ${response.status}`);
             }
             
-            const data = await response.json();
+            const data = await readApiResponse(response);
             
             if (!data || !Array.isArray(data.list)) {
                 throw new Error(`自定义API ${index+1} 返回的数据格式无效`);

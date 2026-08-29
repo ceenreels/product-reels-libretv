@@ -1,5 +1,9 @@
 // 全局变量
-let currentApiSource = localStorage.getItem('currentApiSource') || 'heimuer';
+const storedApiSource = localStorage.getItem('currentApiSource');
+// 旧版本默认的 json.heimuer.xyz 已失效，首次打开时迁移到可用源。
+let currentApiSource = storedApiSource === 'heimuer'
+    ? DEFAULT_API_SOURCE
+    : (storedApiSource || DEFAULT_API_SOURCE);
 let customApiUrl = localStorage.getItem('customApiUrl') || '';
 // 添加当前播放的集数索引
 let currentEpisodeIndex = 0;
@@ -37,6 +41,9 @@ document.addEventListener('DOMContentLoaded', function() {
     
     // 初始化显示当前站点状态（使用优化后的测试函数）
     updateSiteStatusWithTest(currentApiSource);
+
+    // 首页加载热门推荐
+    loadRecommendations();
     
     // 渲染搜索历史
     renderSearchHistory();
@@ -56,6 +63,88 @@ document.addEventListener('DOMContentLoaded', function() {
     // 设置事件监听器
     setupEventListeners();
 });
+
+let recommendationPage = 1;
+const RECOMMENDATION_PAGE_SIZE = 12;
+
+async function loadRecommendations() {
+    const area = document.getElementById('recommendationArea');
+    const container = document.getElementById('recommendationResults');
+    if (!area || !container) return;
+
+    const source = currentApiSource === 'custom' || currentApiSource === 'aggregated'
+        ? DEFAULT_API_SOURCE
+        : currentApiSource;
+
+    area.classList.remove('hidden');
+    container.innerHTML = '<div class="col-span-full text-center text-gray-500 py-8">推荐内容加载中...</div>';
+
+    try {
+        const response = await fetch(`/api/recommendations?source=${encodeURIComponent(source)}&page=${recommendationPage}`);
+        const data = await response.json();
+
+        if (!response.ok || data.code === 400 || !Array.isArray(data.list)) {
+            throw new Error(data.msg || '推荐内容加载失败');
+        }
+
+        renderRecommendations(data.list.slice(0, RECOMMENDATION_PAGE_SIZE));
+    } catch (error) {
+        console.error('加载推荐内容失败:', error);
+        container.innerHTML = '<div class="col-span-full text-center text-gray-500 py-8">暂时无法加载推荐内容，请稍后重试</div>';
+    }
+}
+
+function renderRecommendations(items) {
+    const container = document.getElementById('recommendationResults');
+    if (!container) return;
+
+    container.innerHTML = '';
+    if (!items.length) {
+        container.innerHTML = '<div class="col-span-full text-center text-gray-500 py-8">暂无推荐内容</div>';
+        return;
+    }
+
+    items.forEach(item => {
+        const card = document.createElement('article');
+        card.className = 'recommendation-card card-hover bg-[#111] rounded-lg overflow-hidden cursor-pointer transition-all hover:scale-[1.02]';
+
+        const button = document.createElement('button');
+        button.type = 'button';
+        button.className = 'block w-full text-left';
+        button.addEventListener('click', () => {
+            showDetails(String(item.vod_id || ''), item.vod_name || '未知视频', item.source_code || currentApiSource);
+        });
+
+        const cover = document.createElement('div');
+        cover.className = 'relative aspect-[2/3] overflow-hidden bg-[#222]';
+        if (item.vod_pic && /^https?:\/\//i.test(item.vod_pic)) {
+            const image = document.createElement('img');
+            image.src = item.vod_pic;
+            image.alt = item.vod_name || '视频封面';
+            image.loading = 'lazy';
+            image.referrerPolicy = 'no-referrer';
+            image.className = 'w-full h-full object-cover';
+            image.onerror = () => { image.style.display = 'none'; };
+            cover.appendChild(image);
+        } else {
+            cover.innerHTML = '<div class="w-full h-full flex items-center justify-center text-gray-600">无封面</div>';
+        }
+
+        const content = document.createElement('div');
+        content.className = 'p-3';
+        const title = document.createElement('h3');
+        title.className = 'font-medium text-sm line-clamp-2 min-h-[2.5rem]';
+        title.textContent = item.vod_name || '未知视频';
+        const meta = document.createElement('p');
+        meta.className = 'text-xs text-gray-500 mt-2 truncate';
+        meta.textContent = item.vod_remarks || item.vod_year || '点击查看详情';
+        content.append(title, meta);
+
+        button.append(cover, content);
+        card.appendChild(button);
+        container.appendChild(card);
+    });
+}
 
 // 带有超时和缓存的站点可用性测试
 async function updateSiteStatusWithTest(source) {
@@ -278,6 +367,10 @@ function resetSearchArea() {
     document.getElementById('searchArea').classList.add('flex-1');
     document.getElementById('searchArea').classList.remove('mb-8');
     document.getElementById('resultsArea').classList.add('hidden');
+    const recommendationArea = document.getElementById('recommendationArea');
+    if (recommendationArea) {
+        recommendationArea.classList.remove('hidden');
+    }
     
     // 确保页脚正确显示，移除相对定位
     const footer = document.querySelector('.footer');
@@ -324,7 +417,7 @@ async function search() {
         
         // 添加超时处理
         const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 15000);
+        const timeoutId = setTimeout(() => controller.abort(), API_REQUEST_TIMEOUT + 5000);
         
         const response = await fetch('/api/search?wd=' + encodeURIComponent(query) + apiParams, {
             signal: controller.signal
@@ -358,6 +451,7 @@ async function search() {
         document.getElementById('searchArea').classList.remove('flex-1');
         document.getElementById('searchArea').classList.add('mb-8');
         document.getElementById('resultsArea').classList.remove('hidden');
+        document.getElementById('recommendationArea').classList.add('hidden');
         
         const resultsDiv = document.getElementById('results');
         
