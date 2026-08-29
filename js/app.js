@@ -117,18 +117,20 @@ function renderRecommendations(items) {
 
         const cover = document.createElement('div');
         cover.className = 'relative aspect-[2/3] overflow-hidden bg-[#222]';
-        if (item.vod_pic && /^https?:\/\//i.test(item.vod_pic)) {
-            const image = document.createElement('img');
-            image.src = item.vod_pic;
-            image.alt = item.vod_name || '视频封面';
-            image.loading = 'lazy';
-            image.referrerPolicy = 'no-referrer';
-            image.className = 'w-full h-full object-cover';
-            image.onerror = () => { image.style.display = 'none'; };
-            cover.appendChild(image);
-        } else {
-            cover.innerHTML = '<div class="w-full h-full flex items-center justify-center text-gray-600">无封面</div>';
-        }
+        const image = document.createElement('img');
+        const fallbackCover = createRecommendationFallbackCover(item.vod_name);
+        const remoteCover = item.vod_pic && /^https?:\/\//i.test(item.vod_pic)
+            ? item.vod_pic
+            : fallbackCover;
+        image.src = remoteCover;
+        image.alt = item.vod_name ? `${item.vod_name}封面` : '视频封面';
+        image.loading = 'lazy';
+        image.referrerPolicy = 'no-referrer';
+        image.className = 'w-full h-full object-cover';
+        image.onerror = () => {
+            if (image.src !== fallbackCover) image.src = fallbackCover;
+        };
+        cover.appendChild(image);
 
         const content = document.createElement('div');
         content.className = 'p-3';
@@ -144,6 +146,26 @@ function renderRecommendations(items) {
         card.appendChild(button);
         container.appendChild(card);
     });
+}
+
+function createRecommendationFallbackCover(title) {
+    const label = String(title || '精彩推荐')
+        .replace(/[&<>"']/g, character => ({
+            '&': '&amp;',
+            '<': '&lt;',
+            '>': '&gt;',
+            '"': '&quot;',
+            "'": '&#39;'
+        })[character])
+        .slice(0, 18);
+    const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 600" role="img" aria-label="${label}">
+        <defs><linearGradient id="g" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#312e81"/><stop offset="1" stop-color="#be185d"/></linearGradient></defs>
+        <rect width="400" height="600" fill="url(#g)"/>
+        <circle cx="330" cy="100" r="150" fill="#fff" opacity=".12"/>
+        <circle cx="55" cy="540" r="190" fill="#000" opacity=".16"/>
+        <text x="200" y="330" fill="#fff" font-family="sans-serif" font-size="28" text-anchor="middle">${label}</text>
+    </svg>`;
+    return `data:image/svg+xml;charset=UTF-8,${encodeURIComponent(svg)}`;
 }
 
 // 带有超时和缓存的站点可用性测试

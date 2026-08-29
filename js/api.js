@@ -56,6 +56,54 @@ function buildProxyUrl(targetUrl) {
     return `${PROXY_URL}${encodeURIComponent(targetUrl)}`;
 }
 
+function isValidCoverUrl(value) {
+    return typeof value === 'string' && /^https?:\/\//i.test(value.trim());
+}
+
+// 苹果CMS的列表接口经常省略 vod_pic。详情接口仍会返回封面，
+// 因此首页推荐在缺少封面时批量补查详情，而不是把空字段直接传给前端。
+async function fetchRecommendationCovers(sourceCode, videoIds) {
+    if (!API_SITES[sourceCode] || !videoIds.length) return new Map();
+
+    const detailUrl = `${API_SITES[sourceCode].api}${API_CONFIG.detail.path}${videoIds.join(',')}`;
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), Math.min(API_REQUEST_TIMEOUT, 12000));
+
+    try {
+        const response = await fetch(buildProxyUrl(detailUrl), {
+            headers: API_CONFIG.detail.headers,
+            signal: controller.signal
+        });
+        if (!response.ok) return new Map();
+
+        const data = await readApiResponse(response);
+        const covers = new Map();
+        if (!Array.isArray(data?.list)) return covers;
+        data.list.forEach(item => {
+            if (item?.vod_id && isValidCoverUrl(item.vod_pic)) {
+                covers.set(String(item.vod_id), item.vod_pic.trim());
+            }
+        });
+        return covers;
+    } catch (error) {
+        // 详情失败不应阻塞整个推荐列表，前端会显示稳定的占位封面。
+        console.warn(`批量获取推荐封面失败(${sourceCode}):`, error);
+        return new Map();
+    } finally {
+        clearTimeout(timeoutId);
+    }
+}
+
+async function enrichRecommendationCovers(items, sourceCode) {
+    const pending = items.filter(item => !isValidCoverUrl(item.vod_pic) && item.vod_id);
+    const covers = await fetchRecommendationCovers(sourceCode, pending.map(item => item.vod_id));
+    pending.forEach(item => {
+        const cover = covers.get(String(item.vod_id));
+        if (cover) item.vod_pic = cover;
+    });
+    return items;
+}
+
 // 改进的API请求处理函数
 async function handleApiRequest(url) {
     const customApi = url.searchParams.get('customApi') || '';
@@ -160,6 +208,9 @@ async function handleApiRequest(url) {
                 if (!data || !Array.isArray(data.list)) {
                     throw new Error('推荐接口返回的数据格式无效');
                 }
+
+                // 前端只展示首屏 12 条，避免为不可见条目额外消耗代理请求。
+                await enrichRecommendationCovers(data.list.slice(0, 12), sourceCode);
 
                 data.list.forEach(item => {
                     item.source_name = API_SITES[sourceCode].name;
