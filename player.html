@@ -377,9 +377,51 @@
             }, 2000);
         }
 
+        // 非凡影视的分享页不是 m3u8，而是 HTML 包裹页，需先解析出真实播放清单。
+        async function resolvePlayableVideoUrl(videoUrl) {
+            if (!videoUrl) return '';
+
+            let parsedUrl;
+            try {
+                parsedUrl = new URL(videoUrl, window.location.href);
+            } catch (error) {
+                console.warn('视频链接格式无效:', error);
+                return null;
+            }
+
+            const pathWithQuery = `${parsedUrl.pathname}${parsedUrl.search}`;
+            if (/\.m3u8(?:$|[?#])/i.test(pathWithQuery) || !/\/share(?:\/|$)/i.test(parsedUrl.pathname)) {
+                return videoUrl;
+            }
+
+            try {
+                const response = await fetch(parsedUrl.href, { credentials: 'omit' });
+                if (!response.ok) {
+                    throw new Error(`分享页请求失败: ${response.status}`);
+                }
+
+                const html = await response.text();
+                const match = html.match(/(?:const|let|var)\s+url\s*=\s*["']([^"']+\.m3u8(?:\?[^"']*)?)["']/i);
+                if (!match) {
+                    throw new Error('分享页中未找到 m3u8 地址');
+                }
+
+                return new URL(match[1].replace(/\\\//g, '/'), parsedUrl.href).href;
+            } catch (error) {
+                console.warn('解析视频分享页失败:', error);
+                return null;
+            }
+        }
+
         // 初始化播放器
-        function initPlayer(videoUrl) {
+        async function initPlayer(videoUrl) {
             if (!videoUrl) return;
+
+            const playableVideoUrl = await resolvePlayableVideoUrl(videoUrl);
+            if (!playableVideoUrl) {
+                showError('视频链接解析失败，请尝试其他视频源');
+                return;
+            }
 
             // 配置HLS.js选项
             const hlsConfig = {
@@ -422,7 +464,7 @@
                 mutex: true,
                 volume: 0.7,
                 video: {
-                    url: videoUrl,
+                    url: playableVideoUrl,
                     type: 'hls',
                     pic: '',
                     customType: {
@@ -766,7 +808,7 @@
         }
 
         // 播放指定集数
-        function playEpisode(index) {
+        async function playEpisode(index) {
             if (index < 0 || index >= currentEpisodes.length) return;
             
             // 首先隐藏之前可能显示的错误
@@ -781,6 +823,12 @@
             const url = currentEpisodes[index];
             currentEpisodeIndex = index;
             videoHasEnded = false; // 重置视频结束标志
+
+            const playableVideoUrl = await resolvePlayableVideoUrl(url);
+            if (!playableVideoUrl) {
+                showError('视频链接解析失败，请尝试其他视频源');
+                return;
+            }
             
             // 更新URL，不刷新页面
             const newUrl = new URL(window.location.href);
@@ -792,7 +840,7 @@
             if (dp) {
                 try {
                     dp.switchVideo({
-                        url: url,
+                        url: playableVideoUrl,
                         type: 'hls'
                     });
                     
@@ -802,16 +850,16 @@
                         playPromise.catch(error => {
                             console.warn('播放失败，尝试重新初始化:', error);
                             // 如果切换视频失败，重新初始化播放器
-                            initPlayer(url);
+                            initPlayer(playableVideoUrl);
                         });
                     }
                 } catch (e) {
                     console.error('切换视频出错，尝试重新初始化:', e);
                     // 如果出错，重新初始化播放器
-                    initPlayer(url);
+                    initPlayer(playableVideoUrl);
                 }
             } else {
-                initPlayer(url);
+                initPlayer(playableVideoUrl);
             }
             
             // 更新UI
