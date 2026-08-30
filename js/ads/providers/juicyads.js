@@ -35,11 +35,17 @@ export function createJuicyAdsProvider(config = {}) {
             documentRef = context.document || globalThis.document;
             if (!documentRef || initialized) return;
             initialized = true;
+            const configuredTarget = settings.popunderContainerId
+                ? documentRef.getElementById?.(settings.popunderContainerId)
+                : null;
+            const popunderTarget = configuredTarget || (settings.popunderPlacement === 'body'
+                ? documentRef.body
+                : documentRef.head);
             if (settings.popunderScriptSrc) {
-                appendJuicySnippet(documentRef, documentRef.head, `<script src="${settings.popunderScriptSrc}"></script>`, 'juicyads-popunder');
+                appendJuicySnippet(documentRef, popunderTarget, `<script src="${settings.popunderScriptSrc}"></script>`, 'juicyads-popunder');
             }
             if (settings.popunderCode) {
-                appendJuicySnippet(documentRef, documentRef.head, settings.popunderCode, 'juicyads-popunder-code');
+                appendJuicySnippet(documentRef, popunderTarget, settings.popunderCode, 'juicyads-popunder-code');
             }
         },
 
