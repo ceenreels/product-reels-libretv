@@ -146,6 +146,56 @@ body {
     min-height: 100vh;
 }
 
+/* Adsterra 广告容器：限制第三方 iframe 宽度，避免小屏横向溢出。 */
+.ad-slot {
+    width: 100%;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    margin: 1rem auto;
+    overflow: hidden;
+    text-align: center;
+}
+
+.ad-slot script {
+    display: none;
+}
+
+.ad-slot iframe,
+.ad-slot ins {
+    max-width: 100%;
+    border: 0;
+}
+
+.ad-responsive-banner {
+    min-height: 50px;
+}
+
+.ad-native-banner {
+    min-height: 90px;
+}
+
+.ad-square-banner {
+    min-height: 250px;
+}
+
+.ad-service-slot {
+    width: 0;
+    height: 0;
+    overflow: visible;
+}
+
+@media (max-width: 519px) {
+    .ad-slot {
+        margin-top: 0.75rem;
+        margin-bottom: 0.75rem;
+    }
+
+    .ad-square-banner {
+        min-height: 250px;
+    }
+}
+
 .container {
     flex: 1;
 }

@@ -174,6 +174,12 @@
             </div>
         </div>
 
+        <!-- 播放器下方响应式横幅广告 -->
+        <div id="ad-responsive-banner" class="ad-slot ad-responsive-banner player-container" aria-label="广告"></div>
+
+        <!-- 播放器下方 300x250 广告 -->
+        <div id="ad-square-banner" class="ad-slot ad-square-banner player-container" aria-label="广告"></div>
+
         <!-- 集数导航 -->
         <div class="player-container">
             <div class="flex justify-between items-center my-4">
@@ -228,6 +234,10 @@
         </svg>
         <span id="shortcutText"></span>
     </div>
+
+    <!-- Popunder 和 Social Bar 为全局广告脚本，不占用页面布局空间。 -->
+    <div id="ad-popunder" class="ad-service-slot" aria-hidden="true"></div>
+    <div id="ad-social-bar" class="ad-service-slot" aria-hidden="true"></div>
 
     <script src="https://s4.zstatic.net/ajax/libs/hls.js/1.5.6/hls.min.js" integrity="sha256-X1GmLMzVcTBRiGjEau+gxGpjRK96atNczcLBg5w6hKA=" crossorigin="anonymous"></script>
     <script src="https://s4.zstatic.net/ajax/libs/dplayer/1.26.0/DPlayer.min.js" integrity="sha256-OJg03lDZP0NAcl3waC9OT5jEa8XZ8SM2n081Ik953o4=" crossorigin="anonymous"></script>
@@ -927,5 +937,6 @@
             dp.seek(clickTime);
         }
     </script>
+    <script src="js/ads.js"></script>
 </body>
 </html>
