@@ -72,3 +72,38 @@ test('Adsterra initializes with a native DOM dataset property', async () => {
   const provider = createAdsterraProvider({ enabled: true });
   await assert.doesNotReject(() => provider.init({ document: documentRef }));
 });
+
+test('JuicyAds places PopUnder code in the configured body target', async () => {
+  const headScripts = [];
+  const bodyScripts = [];
+  const documentRef = {
+    head: { appendChild: node => headScripts.push(node) },
+    body: { appendChild: node => bodyScripts.push(node) },
+    createElement: tag => ({ tagName: tag.toUpperCase(), dataset: {}, setAttribute() {} })
+  };
+  const provider = createJuicyAdsProvider({
+    enabled: true,
+    popunderPlacement: 'body',
+    popunderCode: '<script src="https://juicy.example/pop.js"></script>'
+  });
+  await provider.init({ document: documentRef });
+  assert.equal(headScripts.length, 0);
+  assert.equal(bodyScripts.length, 1);
+});
+
+test('JuicyAds can place code in a dedicated top-of-body service slot', async () => {
+  const serviceSlot = { appendChild: node => { serviceSlot.node = node; }, querySelector() { return null; } };
+  const documentRef = {
+    head: { appendChild() {} },
+    body: { appendChild() {} },
+    createElement: tag => ({ tagName: tag.toUpperCase(), dataset: {}, setAttribute() {} }),
+    getElementById: id => id === 'ad-popunder' ? serviceSlot : null
+  };
+  const provider = createJuicyAdsProvider({
+    enabled: true,
+    popunderContainerId: 'ad-popunder',
+    popunderCode: '<script src="https://juicy.example/pop.js"></script>'
+  });
+  await provider.init({ document: documentRef });
+  assert.equal(serviceSlot.node.src, 'https://juicy.example/pop.js');
+});
