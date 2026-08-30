@@ -3,7 +3,7 @@
 (function () {
     const ADS = {
         nativeBanner: {
-            src: 'https://pl31089670.profitableratecpmnetwork.com/5ab709ddd4bc614f52a6cbd02931be38/invoke.js',
+            src: 'https://closurenosy.com/5ab709ddd4bc614f52a6cbd02931be38/invoke.js',
             containerId: 'container-5ab709ddd4bc614f52a6cbd02931be38'
         },
         banners: {
@@ -11,25 +11,25 @@
                 width: 728,
                 height: 90,
                 key: 'df2b98674c7ec5c8b8322b6e8868010c',
-                src: 'https://www.highrevenueformat.com/df2b98674c7ec5c8b8322b6e8868010c/invoke.js'
+                src: 'https://closurenosy.com/df2b98674c7ec5c8b8322b6e8868010c/invoke.js'
             },
             medium: {
                 width: 468,
                 height: 60,
                 key: '2aa63bd3cd82c57f83a502262b245a01',
-                src: 'https://www.highrevenueformat.com/2aa63bd3cd82c57f83a502262b245a01/invoke.js'
+                src: 'https://closurenosy.com/2aa63bd3cd82c57f83a502262b245a01/invoke.js'
             },
             mobile: {
                 width: 320,
                 height: 50,
                 key: '5e8661f13409efe73463c18b6d6f277a',
-                src: 'https://www.highrevenueformat.com/5e8661f13409efe73463c18b6d6f277a/invoke.js'
+                src: 'https://closurenosy.com/5e8661f13409efe73463c18b6d6f277a/invoke.js'
             },
             square: {
                 width: 300,
                 height: 250,
                 key: '96f20abe4e9e5d2c41ea6e4302114ad2',
-                src: 'https://www.highrevenueformat.com/96f20abe4e9e5d2c41ea6e4302114ad2/invoke.js'
+                src: 'https://closurenosy.com/96f20abe4e9e5d2c41ea6e4302114ad2/invoke.js'
             }
         }
     };
