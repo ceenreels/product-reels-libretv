@@ -107,3 +107,68 @@ test('JuicyAds can place code in a dedicated top-of-body service slot', async ()
   await provider.init({ document: documentRef });
   assert.equal(serviceSlot.node.src, 'https://juicy.example/pop.js');
 });
+
+test('JuicyAds banner snippets preserve the ins target and script attributes', async () => {
+  const nodes = [];
+  const documentRef = {
+    head: { appendChild() {} },
+    body: { appendChild() {} },
+    createElement: tag => {
+      const node = {
+        tagName: tag.toUpperCase(),
+        dataset: {},
+        attributes: {},
+        setAttribute(name, value) { this.attributes[name] = value; },
+        appendChild(child) { nodes.push(child); }
+      };
+      return node;
+    }
+  };
+  const slot = {
+    dataset: {},
+    appendChild(node) { nodes.push(node); },
+    querySelector() { return null; }
+  };
+  const provider = createJuicyAdsProvider({
+    enabled: true,
+    slotSnippets: {
+      'ad-juicy-banner': '<script type="text/javascript" async src="https://poweredby.jads.co/js/jads.js"></script><ins id="1125773" data-width="300" data-height="250"></ins><script async>(adsbyjuicy = window.adsbyjuicy || []).push({\'adzone\':1125773});</script>'
+    }
+  });
+  await provider.init({ document: documentRef });
+  await provider.mount('ad-juicy-banner', slot, { document: documentRef });
+  assert.deepEqual(nodes.map(node => node.tagName), ['SCRIPT', 'INS', 'SCRIPT']);
+  assert.equal(nodes[0].attributes.async, '');
+  assert.equal(nodes[0].attributes['<script'], undefined);
+  assert.equal(nodes[1].attributes['data-width'], '300');
+  assert.equal(nodes[1].attributes['data-height'], '250');
+});
+
+test('JuicyAds responsive banner chooses the mobile snippet on a narrow viewport', async () => {
+  const nodes = [];
+  const documentRef = {
+    defaultView: { innerWidth: 390 },
+    head: { appendChild() {} },
+    body: { appendChild() {} },
+    createElement: tag => ({
+      tagName: tag.toUpperCase(),
+      dataset: {},
+      attributes: {},
+      setAttribute(name, value) { this.attributes[name] = value; },
+      appendChild(node) { nodes.push(node); }
+    })
+  };
+  const slot = { dataset: {}, appendChild(node) { nodes.push(node); }, querySelector() { return null; } };
+  const provider = createJuicyAdsProvider({
+    enabled: true,
+    slotSnippets: {
+      'ad-juicy-responsive-banner': {
+        desktop: '<ins data-width="300" data-height="250"></ins>',
+        mobile: '<ins data-width="300" data-height="50"></ins>'
+      }
+    }
+  });
+  await provider.init({ document: documentRef });
+  await provider.mount('ad-juicy-responsive-banner', slot, { document: documentRef });
+  assert.equal(nodes[0].attributes['data-height'], '50');
+});

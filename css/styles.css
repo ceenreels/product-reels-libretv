@@ -179,6 +179,10 @@ body {
     min-height: 250px;
 }
 
+.ad-juicy-responsive-banner {
+    min-height: 250px;
+}
+
 .ad-service-slot {
     width: 0;
     height: 0;
@@ -193,6 +197,10 @@ body {
 
     .ad-square-banner {
         min-height: 250px;
+    }
+
+    .ad-juicy-responsive-banner {
+        min-height: 50px;
     }
 }
 
