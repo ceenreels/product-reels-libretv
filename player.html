@@ -390,7 +390,8 @@
             }
 
             const pathWithQuery = `${parsedUrl.pathname}${parsedUrl.search}`;
-            if (/\.m3u8(?:$|[?#])/i.test(pathWithQuery) || !/\/share(?:\/|$)/i.test(parsedUrl.pathname)) {
+            const isVideoPage = /\/(?:share|play)(?:\/|$)/i.test(parsedUrl.pathname);
+            if (/\.(?:m3u8|mp4)(?:$|[?#])/i.test(pathWithQuery) || !isVideoPage) {
                 return videoUrl;
             }
 
@@ -401,7 +402,7 @@
                 }
 
                 const html = await response.text();
-                const match = html.match(/(?:const|let|var)\s+url\s*=\s*["']([^"']+\.m3u8(?:\?[^"']*)?)["']/i);
+                const match = html.match(/(?:const|let|var)\s+\w+\s*=\s*["']([^"']+\.(?:m3u8|mp4)(?:\?[^"']*)?)["']/i);
                 if (!match) {
                     throw new Error('分享页中未找到 m3u8 地址');
                 }
