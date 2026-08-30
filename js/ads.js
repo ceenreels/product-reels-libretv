@@ -2,12 +2,6 @@
 // 每个页面只加载一次对应广告，避免多个 atOptions 配置互相覆盖。
 (function () {
     const ADS = {
-        popunder: {
-            src: 'https://pl31085490.profitableratecpmnetwork.com/1e/b9/a6/1eb9a62a6a4cb9cd25813b4d2c1341de.js'
-        },
-        socialBar: {
-            src: 'https://pl31085491.profitableratecpmnetwork.com/b7/58/b0/b758b0306a71fb06846e2cfd07fc471e.js'
-        },
         nativeBanner: {
             src: 'https://pl31089670.profitableratecpmnetwork.com/5ab709ddd4bc614f52a6cbd02931be38/invoke.js',
             containerId: 'container-5ab709ddd4bc614f52a6cbd02931be38'
@@ -53,12 +47,6 @@
             else if (value !== false && value != null) script.setAttribute(name, value);
         });
         container.appendChild(script);
-    }
-
-    function loadServiceAd(slotId, ad, dataKey) {
-        const slot = document.getElementById(slotId);
-        if (!slot) return;
-        appendExternalScript(slot, ad.src, dataKey, { async: true });
     }
 
     function loadNativeBanner() {
@@ -110,8 +98,6 @@
     }
 
     function initAds() {
-        loadServiceAd('ad-popunder', ADS.popunder, 'popunder');
-        loadServiceAd('ad-social-bar', ADS.socialBar, 'social-bar');
         loadNativeBanner();
         loadAtOptionsBanner('ad-responsive-banner', getResponsiveBanner(), 'responsive-banner');
         loadAtOptionsBanner('ad-square-banner', ADS.banners.square, 'square-banner');
