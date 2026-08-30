@@ -6,10 +6,10 @@ export const ADS_CONFIG = {
         juicyads: {
             enabled: true,
             siteId: '316626',
-            // JuicyAds only exposes PopUnder code after website verification.
-            // The verified code will be added here after the provider releases it.
+            popunderPlacement: 'body',
+            popunderContainerId: 'ad-popunder',
+            popunderCode: '<!-- JuicyAds PopUnders v3 Start --> <script type="text/javascript" src="https://js.juicyads.com/jp.php?c=4474w233t244u4r2p2c4337474&u=https%3A%2F%2Fwww.jumeitianxia.com%2F"></script> <!-- JuicyAds PopUnders v3 End -->',
             popunderScriptSrc: '',
-            popunderCode: '',
             slotSnippets: {}
         },
         adsense: {
