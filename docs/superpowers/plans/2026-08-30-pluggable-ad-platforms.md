@@ -145,7 +145,7 @@ Expected: all provider and manager tests PASS.
 **Files:**
 - Modify: `js/ads/config.js` when JuicyAds returns verified code
 
-- [ ] **Step 1: Push the verification meta and adapter architecture to `ceenreels/product-reels-libretv`**
-- [ ] **Step 2: Use Chrome to click JuicyAds `Verify Website` and confirm the site becomes verified**
-- [ ] **Step 3: Read the released PopUnder code from JuicyAds and put only that exact snippet into `ADS_CONFIG`**
-- [ ] **Step 4: Re-run tests, publish the final change, and check the production homepage source**
+- [x] **Step 1: Push the verification meta and adapter architecture to `ceenreels/product-reels-libretv`**
+- [x] **Step 2: Use Chrome to click JuicyAds `Verify Website` and confirm the site becomes verified**
+- [x] **Step 3: Read the released PopUnder code from JuicyAds and put only that exact snippet into `ADS_CONFIG`**
+- [x] **Step 4: Re-run tests, publish the final change, and check the production homepage source**
