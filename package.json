@@ -1,0 +1,8 @@
+{
+  "name": "product-reels-libretv",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "node --test"
+  }
+}
