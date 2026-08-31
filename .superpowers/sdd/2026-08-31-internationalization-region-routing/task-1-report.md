@@ -51,3 +51,9 @@ Fix verification:
 `node --test tests/i18n-routing.test.js`: 4 tests passed, 0 failed.
 
 `node --test tests/*.test.js`: 25 tests passed, 0 failed.
+
+## Prototype-key validation fix
+
+`resolveSourceMode` now uses an own-property check, preventing inherited keys such as `toString` and `__proto__` from selecting manual mode. Added regression assertions for both keys.
+
+Verification output: focused `node --test tests/i18n-routing.test.js` 4 passed/0 failed; full `node --test tests/*.test.js` 25 passed/0 failed.

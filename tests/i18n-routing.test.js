@@ -37,5 +37,7 @@ test('invalid stored source does not force manual mode', async () => {
   const sandbox = await loadScripts(['js/source-routing.js']);
   sandbox.API_SITES = { ffzy: {} };
   assert.equal(sandbox.LibretvRouting.resolveSourceMode({ storedSource: 'missing' }), 'region');
+  assert.equal(sandbox.LibretvRouting.resolveSourceMode({ storedSource: 'toString' }), 'region');
+  assert.equal(sandbox.LibretvRouting.resolveSourceMode({ storedSource: '__proto__' }), 'region');
   assert.equal(sandbox.LibretvRouting.resolveSourceMode({ storedMode: 'manual', storedSource: 'missing' }), 'manual');
 });
