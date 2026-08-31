@@ -1,4 +1,10 @@
 // UI相关函数
+function uiText(key, fallback, values) {
+    const locale = (typeof currentLocale !== 'undefined' && currentLocale) || localStorage.getItem('libretv:locale') || localStorage.getItem('locale') || 'en';
+    let text = globalThis.LibretvI18n?.t(key, locale, fallback) || fallback || key;
+    Object.entries(values || {}).forEach(([name, value]) => { text = text.replaceAll(`{${name}}`, String(value)); });
+    return text;
+}
 function toggleSettings(e) {
     // 阻止事件冒泡，防止触发document的点击事件
     e && e.stopPropagation();
@@ -63,7 +69,7 @@ function showNextToast() {
 // 添加显示/隐藏 loading 的函数
 let loadingTimeoutId = null;
 
-function showLoading(message = '加载中...') {
+function showLoading(message = uiText('loading', 'Loading...')) {
     // 清除任何现有的超时
     if (loadingTimeoutId) {
         clearTimeout(loadingTimeoutId);
@@ -77,7 +83,7 @@ function showLoading(message = '加载中...') {
     // 设置30秒后自动关闭loading，防止无限loading
     loadingTimeoutId = setTimeout(() => {
         hideLoading();
-        showToast('操作超时，请稍后重试', 'warning');
+        showToast(uiText('loadingTimeout', 'Operation timed out; please try again'), 'warning');
     }, 30000);
 }
 
@@ -95,9 +101,9 @@ function hideLoading() {
 function updateSiteStatus(isAvailable) {
     const statusEl = document.getElementById('siteStatus');
     if (isAvailable) {
-        statusEl.innerHTML = '<span class="text-green-500">●</span> 可用';
+        statusEl.innerHTML = `<span class="text-green-500">●</span> ${uiText('sourceHealthy', 'Available')}`;
     } else {
-        statusEl.innerHTML = '<span class="text-red-500">●</span> 不可用';
+        statusEl.innerHTML = `<span class="text-red-500">●</span> ${uiText('sourceUnavailable', 'Unavailable')}`;
     }
 }
 
@@ -192,7 +198,7 @@ function renderSearchHistory() {
         return;
     }
     
-    historyContainer.innerHTML = '<div class="text-gray-500 w-full mb-2">最近搜索:</div>';
+    historyContainer.innerHTML = `<div class="text-gray-500 w-full mb-2">${uiText('recentSearchesLabel', 'Recent searches:')}</div>`;
     
     history.forEach(item => {
         const tag = document.createElement('button');
@@ -202,7 +208,7 @@ function renderSearchHistory() {
         // 添加时间提示（如果有时间戳）
         if (item.timestamp) {
             const date = new Date(item.timestamp);
-            tag.title = `搜索于: ${date.toLocaleString()}`;
+            tag.title = uiText('searchedAt', 'Searched at: {date}', { date: date.toLocaleString() });
         }
         
         tag.onclick = function() {
@@ -218,9 +224,9 @@ function clearSearchHistory() {
     try {
         localStorage.removeItem(SEARCH_HISTORY_KEY);
         renderSearchHistory();
-        showToast('搜索历史已清除', 'success');
+        showToast(uiText('searchHistoryCleared', 'Search history cleared'), 'success');
     } catch (e) {
         console.error('清除搜索历史失败:', e);
-        showToast('清除搜索历史失败', 'error');
+        showToast(uiText('searchHistoryClearError', 'Failed to clear search history'), 'error');
     }
 }

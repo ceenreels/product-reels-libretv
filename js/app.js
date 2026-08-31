@@ -20,6 +20,10 @@ let episodesReversed = false;
 
 // 新增：解析多个自定义API源
 let customApiUrls = [];
+let recommendationGeneration = 0;
+let recommendationController = null;
+let searchGeneration = 0;
+let searchController = null;
 const RECOMMENDATION_CACHE_TTL = 6 * 60 * 60 * 1000;
 const recommendationCache = typeof createRecommendationCache === 'function'
     ? createRecommendationCache()
@@ -31,6 +35,29 @@ function parseCustomApiUrls() {
         .map(url => url.trim())
         .filter(url => url.length > 0)
         .slice(0, CUSTOM_API_CONFIG.maxSources);
+}
+
+function localizedText(key, fallback, values) {
+    let text = LibretvI18n?.t(key, currentLocale, fallback) || fallback || key;
+    Object.entries(values || {}).forEach(([name, value]) => {
+        text = text.replaceAll(`{${name}}`, String(value));
+    });
+    return text;
+}
+
+function getUrlLocaleHint(search) {
+    try {
+        const params = new URLSearchParams(search || '');
+        return params.get('locale') || params.get('lang') || '';
+    } catch (_) {
+        return '';
+    }
+}
+
+function invalidateSearchRequests() {
+    searchGeneration += 1;
+    searchController?.abort();
+    searchController = null;
 }
 
 function populateApiSourceOptions() {
@@ -51,7 +78,7 @@ function populateApiSourceOptions() {
 // 页面初始化
 document.addEventListener('DOMContentLoaded', function() {
     const hasPersistedLocale = !!(localStorage.getItem('libretv:locale') || localStorage.getItem('locale') || localStorage.getItem('currentLocale'));
-    if (!hasPersistedLocale && typeof LibretvI18n !== 'undefined') currentLocale = LibretvI18n.getUrlLocale(location.search) || currentLocale;
+    if (!hasPersistedLocale && typeof LibretvI18n !== 'undefined') currentLocale = getUrlLocaleHint(location.search) || currentLocale;
     currentLocale = (typeof LibretvI18n !== 'undefined' ? LibretvI18n.resolveLocale({storedLocale: currentLocale, browserLanguages: navigator.languages}) : (currentLocale || 'zh-CN'));
     currentRegion = (typeof LibretvI18n !== 'undefined' ? LibretvI18n.resolveRegion({storedRegion: currentRegion, locale: currentLocale, browserLanguages: navigator.languages}) : (currentRegion || 'GLOBAL_ZH'));
     if (!sourceMode) sourceMode = (storedApiSource && API_SITES[storedApiSource]) ? 'manual' : 'region';
@@ -139,12 +166,12 @@ function getLegacyRecommendationSources({ source, sourceMode: mode, plan }) {
     const add = value => {
         if (value && !candidates.includes(value)) candidates.push(value);
     };
-    if (mode === 'manual' && source && source !== 'region' && source !== 'aggregated' && source !== 'custom') add(source);
-    if (typeof API_SITES !== 'undefined' && API_SITES[source]) add(source);
-    (plan?.primary || []).forEach(add);
-    (plan?.fallback || []).forEach(add);
     if (mode === 'custom') add('custom');
-    add(DEFAULT_API_SOURCE);
+    else if (mode === 'manual') add(source);
+    else {
+        (plan?.primary || []).forEach(add);
+        (plan?.fallback || []).forEach(add);
+    }
     return candidates;
 }
 
@@ -170,6 +197,10 @@ async function loadRecommendations() {
     const area = document.getElementById('recommendationArea');
     const container = document.getElementById('recommendationResults');
     if (!area || !container) return;
+
+    const requestGeneration = ++recommendationGeneration;
+    recommendationController?.abort();
+    recommendationController = new AbortController();
 
     const source = currentApiSource === 'custom' || currentApiSource === 'aggregated'
         ? DEFAULT_API_SOURCE
@@ -198,18 +229,22 @@ async function loadRecommendations() {
         if (routeMode === 'custom') query.set('source', 'custom');
         if (routeMode === 'custom' && customApiUrl) query.set('customApi', customApiUrl);
         query.set('page', recommendationPage);
-        const response = await fetch(`/api/recommendations?${query.toString()}`);
+        const response = await fetch(`/api/recommendations?${query.toString()}`, { signal: recommendationController.signal });
+        if (requestGeneration !== recommendationGeneration) return;
         const data = await response.json();
+        if (requestGeneration !== recommendationGeneration) return;
         recommendationFallback = data?.routing?.fellBack === true;
 
-        if (!response.ok || data.code === 400 || !Array.isArray(data.list)) {
-            throw new Error(data.msg || '推荐内容加载失败');
+        const noEligibleSources = data?.noEligibleSources || data?.routing?.noEligibleSources;
+        if (noEligibleSources || !response.ok || data.code === 400 || !Array.isArray(data.list)) {
+            throw new Error(noEligibleSources ? localizedText('noEligibleSources', 'No eligible video sources') : localizedText('recommendationError', 'Recommendations unavailable'));
         }
 
         const items = data.list.slice(0, RECOMMENDATION_PAGE_SIZE);
         recommendationCache?.save(cacheKey, items); updateRouteStatus(recommendationFallback);
         renderRecommendations(items);
     } catch (error) {
+        if (requestGeneration !== recommendationGeneration || error?.name === 'AbortError') return;
         console.error('加载推荐内容失败:', error);
         let cachedItems = recommendationCache?.read(cacheKey, RECOMMENDATION_CACHE_TTL);
         let legacyCacheSource = '';
@@ -227,11 +262,15 @@ async function loadRecommendations() {
             }
         }
         if (cachedItems?.length) {
+            if (requestGeneration !== recommendationGeneration) return;
             renderRecommendations(cachedItems, { legacySource: legacyCacheSource }); updateRouteStatus(recommendationFallback);
             return;
         }
-        container.innerHTML = `<div class="col-span-full text-center text-gray-500 py-8">${LibretvI18n?.t('recommendationError', currentLocale, 'Recommendations unavailable')}</div>`;
+        if (requestGeneration !== recommendationGeneration) return;
+        container.innerHTML = `<div class="col-span-full text-center text-gray-500 py-8">${error?.message || LibretvI18n?.t('recommendationError', currentLocale, 'Recommendations unavailable')}</div>`;
         updateRouteStatus(recommendationFallback);
+    } finally {
+        if (requestGeneration === recommendationGeneration) recommendationController = null;
     }
 }
 
@@ -254,7 +293,7 @@ function renderRecommendations(items, options = {}) {
         button.type = 'button';
         button.className = 'block w-full text-left';
         button.addEventListener('click', () => {
-            showDetails(String(item.vod_id || ''), item.vod_name || '未知视频', item.source_code || legacySource);
+            showDetails(String(item.vod_id || ''), item.vod_name || localizedText('unknownVideo', 'Unknown video'), item.source_code || legacySource);
         });
 
         const cover = document.createElement('div');
@@ -265,7 +304,7 @@ function renderRecommendations(items, options = {}) {
             ? item.vod_pic
             : fallbackCover;
         image.src = remoteCover;
-        image.alt = item.vod_name ? `${item.vod_name}封面` : '视频封面';
+        image.alt = item.vod_name ? `${item.vod_name} ${localizedText('videoCover', 'cover')}` : localizedText('videoCover', 'Video cover');
         image.loading = 'lazy';
         image.referrerPolicy = 'no-referrer';
         image.className = 'w-full h-full object-cover';
@@ -278,7 +317,7 @@ function renderRecommendations(items, options = {}) {
         content.className = 'p-3';
         const title = document.createElement('h3');
         title.className = 'font-medium text-sm line-clamp-2 min-h-[2.5rem]';
-        title.textContent = item.vod_name || '未知视频';
+        title.textContent = item.vod_name || localizedText('unknownVideo', 'Unknown video');
         const isLegacyCache = Boolean(legacySource && !item.source_code);
         if (isLegacyCache) {
             const legacyBadge = document.createElement('span');
@@ -291,7 +330,7 @@ function renderRecommendations(items, options = {}) {
         }
         const meta = document.createElement('p');
         meta.className = 'text-xs text-gray-500 mt-2 truncate';
-        meta.textContent = item.vod_remarks || item.vod_year || '点击查看详情';
+        meta.textContent = item.vod_remarks || item.vod_year || localizedText('viewDetails', 'View details');
         content.append(title, meta);
 
         button.append(cover, content);
@@ -301,7 +340,7 @@ function renderRecommendations(items, options = {}) {
 }
 
 function createRecommendationFallbackCover(title) {
-    const label = String(title || '精彩推荐')
+    const label = String(title || localizedText('featuredRecommendation', 'Featured'))
         .replace(/[&<>"']/g, character => ({
             '&': '&amp;',
             '<': '&lt;',
@@ -323,14 +362,14 @@ function createRecommendationFallbackCover(title) {
 // 带有超时和缓存的站点可用性测试
 async function updateSiteStatusWithTest(source) {
     // 显示加载状态
-    document.getElementById('siteStatus').innerHTML = '<span class="text-gray-500">●</span> 测试中...';
+    document.getElementById('siteStatus').innerHTML = `<span class="text-gray-500">●</span> ${localizedText('siteTesting', 'Testing...')}`;
     
     // 自定义API源特殊处理 - 测试所有提供的API
     if (source === 'custom') {
         const urls = parseCustomApiUrls();
         if (urls.length === 0) {
             updateSiteStatus(false);
-            document.getElementById('siteStatus').innerHTML = '<span class="text-gray-500">●</span> 未设置API';
+            document.getElementById('siteStatus').innerHTML = `<span class="text-gray-500">●</span> ${localizedText('customApiUnset', 'API not configured')}`;
             return;
         }
         
@@ -343,11 +382,11 @@ async function updateSiteStatusWithTest(source) {
         if (availableCount > 0) {
             updateSiteStatus(true);
             document.getElementById('siteStatus').innerHTML = 
-                `<span class="text-green-500">●</span> ${availableCount}/${urls.length} 可用`;
+                `<span class="text-green-500">●</span> ${availableCount}/${urls.length} ${localizedText('sourceHealthy', 'available')}`;
         } else {
             updateSiteStatus(false);
             document.getElementById('siteStatus').innerHTML = 
-                `<span class="text-red-500">●</span> 全部不可用`;
+                `<span class="text-red-500">●</span> ${localizedText('allSourcesUnavailable', 'All unavailable')}`;
         }
         return;
     }
@@ -456,10 +495,10 @@ async function testCustomApiUrl(url) {
 
 // 设置事件监听器
 function setupEventListeners() {
-    document.getElementById('localeSelect')?.addEventListener('change', e => { currentLocale=e.target.value; localStorage.setItem('libretv:locale',currentLocale); LibretvI18n?.apply(document,currentLocale); populateApiSourceOptions(); updateMetadata(); updateRouteStatus(); resetSearchArea(); recommendationPage=1; loadRecommendations(); });
-    document.getElementById('regionSelect')?.addEventListener('change', e => { currentRegion=e.target.value; localStorage.setItem('libretv:region',currentRegion); updateRouteStatus(); resetSearchArea(); recommendationPage=1; loadRecommendations(); });
+    document.getElementById('localeSelect')?.addEventListener('change', e => { invalidateSearchRequests(); currentLocale=e.target.value; localStorage.setItem('libretv:locale',currentLocale); LibretvI18n?.apply(document,currentLocale); populateApiSourceOptions(); updateMetadata(); updateRouteStatus(); resetSearchArea(); recommendationPage=1; loadRecommendations(); });
+    document.getElementById('regionSelect')?.addEventListener('change', e => { invalidateSearchRequests(); currentRegion=e.target.value; localStorage.setItem('libretv:region',currentRegion); updateRouteStatus(); resetSearchArea(); recommendationPage=1; loadRecommendations(); });
     document.getElementById('sourceModeSelect')?.addEventListener('change', e => {
-        sourceMode = e.target.value;
+        invalidateSearchRequests(); sourceMode = e.target.value;
         const api = document.getElementById('apiSource');
         if (sourceMode === 'region' || sourceMode === 'aggregated' || sourceMode === 'custom') currentApiSource = sourceMode;
         else if (!API_SITES[currentApiSource]) {
@@ -475,7 +514,7 @@ function setupEventListeners() {
     });
     // API源选择变更事件
     document.getElementById('apiSource').addEventListener('change', async function(e) {
-        currentApiSource = e.target.value;
+        invalidateSearchRequests(); currentApiSource = e.target.value;
         if (currentApiSource === 'region') { sourceMode='region'; document.getElementById('customApiInput')?.classList.add('hidden'); localStorage.setItem('libretv:sourceMode',sourceMode); localStorage.setItem('currentApiSource', currentApiSource); updateRouteStatus(); resetSearchArea(); recommendationPage=1; loadRecommendations(); return; }
         sourceMode = currentApiSource === 'aggregated' ? 'aggregated' : currentApiSource === 'custom' ? 'custom' : 'manual';
         localStorage.setItem('libretv:sourceMode', sourceMode); const modeEl=document.getElementById('sourceModeSelect'); if(modeEl) modeEl.value=sourceMode;
@@ -487,11 +526,11 @@ function setupEventListeners() {
             localStorage.setItem('customApiUrl', customApiUrl);
             customApiUrls = parseCustomApiUrls();
             // 自定义接口不立即测试可用性
-            document.getElementById('siteStatus').innerHTML = '<span class="text-gray-500">●</span> 待测试';
+            document.getElementById('siteStatus').innerHTML = `<span class="text-gray-500">●</span> ${localizedText('sitePendingTest', 'Pending test')}`;
         } else {
             customApiInput.classList.add('hidden');
             // 非自定义接口立即测试可用性
-            showToast('正在测试站点可用性...', 'info');
+            showToast(localizedText('testingSite', 'Testing source availability...'), 'info');
             updateSiteStatusWithTest(currentApiSource);
         }
         
@@ -510,7 +549,7 @@ function setupEventListeners() {
         localStorage.setItem('customApiUrl', customApiUrl);
         
         if (currentApiSource === 'custom' && customApiUrl) {
-            showToast('正在测试API可用性...', 'info');
+            showToast(localizedText('testingCustomApi', 'Testing API availability...'), 'info');
             customApiUrls = parseCustomApiUrls();
             
             // 测试所有配置的API
@@ -520,8 +559,8 @@ function setupEventListeners() {
                 loadRecommendations();
             } else {
                 document.getElementById('siteStatus').innerHTML = 
-                    '<span class="text-gray-500">●</span> 未设置API';
-                showToast('请输入至少一个有效的API地址', 'warning');
+                    `<span class="text-gray-500">●</span> ${localizedText('customApiUnset', 'API not configured')}`;
+                showToast(localizedText('validCustomApiRequired', 'Enter at least one valid API address'), 'warning');
             }
         }
     });
@@ -540,6 +579,7 @@ function setupEventListeners() {
         
         if (!panel.contains(e.target) && !settingsButton.contains(e.target) && panel.classList.contains('show')) {
             panel.classList.remove('show');
+            panel.setAttribute('aria-hidden', 'true');
         }
     });
     
@@ -587,9 +627,13 @@ async function search() {
     const query = document.getElementById('searchInput').value.trim();
     
     if (!query) {
-        showToast('请输入搜索内容', 'info');
+        showToast(localizedText('searchPrompt', 'Please enter a search term'), 'info');
         return;
     }
+
+    const requestGeneration = ++searchGeneration;
+    searchController?.abort();
+    searchController = new AbortController();
     
     showLoading();
     
@@ -603,7 +647,7 @@ async function search() {
             localStorage.setItem('customApiUrl', customApiUrl);
             
             if (!customApiUrl) {
-                showToast('请先设置自定义API地址', 'warning');
+                showToast(localizedText('customApiRequired', 'Please set a custom API address first'), 'warning');
                 hideLoading();
                 return;
             }
@@ -619,7 +663,7 @@ async function search() {
         }
         
         // 添加超时处理
-        const controller = new AbortController();
+        const controller = searchController;
         const timeoutId = setTimeout(() => controller.abort(), API_REQUEST_TIMEOUT + 5000);
         
         const response = await fetch('/api/search?wd=' + encodeURIComponent(query) + apiParams, {
@@ -629,9 +673,11 @@ async function search() {
         clearTimeout(timeoutId);
         
         const data = await response.json();
+        if (requestGeneration !== searchGeneration) return;
         
-        if (data.code === 400) {
-            showToast(data.msg || '搜索失败，请检查网络连接或更换数据源', 'error');
+        const noEligibleSources = data?.noEligibleSources || data?.routing?.noEligibleSources;
+        if (noEligibleSources || data.code === 400 || !response.ok || !Array.isArray(data.list)) {
+            showToast(noEligibleSources ? localizedText('noEligibleSources', 'No eligible video sources') : localizedText('searchError', 'Search failed'), 'error');
             hideLoading();
             return;
         }
@@ -666,8 +712,8 @@ async function search() {
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" 
                               d="M9.172 16.172a4 4 0 015.656 0M9 10h.01M15 10h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                     </svg>
-                    <h3 class="mt-2 text-lg font-medium text-gray-400">没有找到匹配的结果</h3>
-                    <p class="mt-1 text-sm text-gray-500">请尝试其他关键词或更换数据源</p>
+                    <h3 class="mt-2 text-lg font-medium text-gray-400">${localizedText('searchEmpty', 'No matching results')}</h3>
+                    <p class="mt-1 text-sm text-gray-500">${localizedText('searchEmptyHint', 'Try another keyword or source')}</p>
                 </div>
             `;
             hideLoading();
@@ -703,7 +749,7 @@ async function search() {
                             <div class="w-full h-40 md:h-full">
                                 <img src="${item.vod_pic}" alt="${safeName}" 
                                      class="w-full h-full object-cover transition-transform hover:scale-110" 
-                                     onerror="this.onerror=null; this.src='https://via.placeholder.com/300x450?text=无封面'; this.classList.add('object-contain');" 
+                                     onerror="this.onerror=null; this.src='https://via.placeholder.com/300x450?text=${encodeURIComponent(localizedText('noCover', 'No cover'))}'; this.classList.add('object-contain');"
                                      loading="lazy">
                                 <div class="absolute inset-0 bg-gradient-to-t from-[#111] to-transparent opacity-60"></div>
                             </div>
@@ -726,7 +772,7 @@ async function search() {
                                       </span>` : ''}
                                 </div>
                                 <p class="text-gray-400 text-xs line-clamp-2">
-                                    ${(item.vod_remarks || '暂无介绍').toString().replace(/</g, '&lt;')}
+                                    ${(item.vod_remarks || localizedText('noDescription', 'No description')).toString().replace(/</g, '&lt;')}
                                 </p>
                             </div>
                             
@@ -739,7 +785,7 @@ async function search() {
                                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z" />
                                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                                         </svg>
-                                        点击播放
+                                        ${localizedText('clickToPlay', 'Play')}
                                     </span>
                                 </div>
                             </div>
@@ -750,20 +796,21 @@ async function search() {
         }).join('');
     } catch (error) {
         console.error('搜索错误:', error);
+        if (requestGeneration !== searchGeneration) return;
         if (error.name === 'AbortError') {
-            showToast('搜索请求超时，请检查网络连接', 'error');
+            showToast(localizedText('searchTimeout', 'Search request timed out'), 'error');
         } else {
-            showToast('搜索请求失败，请稍后重试', 'error');
+            showToast(localizedText('searchError', 'Search request failed'), 'error');
         }
     } finally {
-        hideLoading();
+        if (requestGeneration === searchGeneration) { hideLoading(); searchController = null; }
     }
 }
 
 // 显示详情 - 修改函数接受sourceCode参数和API URL
 async function showDetails(id, vod_name, sourceCode = currentApiSource) {
     if (!id) {
-        showToast('视频ID无效', 'error');
+            showToast(localizedText('invalidVideoId', 'Invalid video ID'), 'error');
         return;
     }
     
@@ -785,7 +832,7 @@ async function showDetails(id, vod_name, sourceCode = currentApiSource) {
                 if (urls.length > 0) {
                     apiParams = '&customApi=' + encodeURIComponent(urls[0]);
                 } else {
-                    showToast('无可用的自定义API', 'error');
+                    showToast(localizedText('customApiUnavailable', 'No custom API available'), 'error');
                     hideLoading();
                     return;
                 }
@@ -808,8 +855,8 @@ async function showDetails(id, vod_name, sourceCode = currentApiSource) {
         const sourceName = data.videoInfo && data.videoInfo.source_name ? 
             ` <span class="text-sm font-normal text-gray-400">(${data.videoInfo.source_name})</span>` : '';
         
-        modalTitle.innerHTML = (vod_name || '未知视频') + sourceName;
-        currentVideoTitle = vod_name || '未知视频';
+        modalTitle.innerHTML = (vod_name || localizedText('unknownVideo', 'Unknown video')) + sourceName;
+        currentVideoTitle = vod_name || localizedText('unknownVideo', 'Unknown video');
         
         // 保存当前源码以便后续操作
         currentApiSource = sourceCode;
@@ -837,7 +884,7 @@ async function showDetails(id, vod_name, sourceCode = currentApiSource) {
                         <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
                             <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm1-11a1 1 0 10-2 0v3.586L7.707 9.293a1 1 0 00-1.414 1.414l3 3a1 1 0 001.414 0l3-3a1 1 0 00-1.414-1.414L11 10.586V7z" clip-rule="evenodd" />
                         </svg>
-                        <span>倒序排列</span>
+                        <span>${localizedText('reverseOrder', 'Reverse order')}</span>
                     </button>
                 </div>
                 <div id="episodesGrid" class="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-6 lg:grid-cols-8 gap-2">
@@ -845,16 +892,16 @@ async function showDetails(id, vod_name, sourceCode = currentApiSource) {
                 </div>
             `;
         } else {
-            modalContent.innerHTML = '<p class="text-center text-gray-400 py-8">没有找到可播放的视频</p>';
+            modalContent.innerHTML = `<p class="text-center text-gray-400 py-8">${localizedText('noPlayableVideo', 'No playable video found')}</p>`;
         }
         
         modal.classList.remove('hidden');
     } catch (error) {
         console.error('获取详情错误:', error);
         if (error.name === 'AbortError') {
-            showToast('获取详情超时，请检查网络连接', 'error');
+            showToast(localizedText('detailTimeout', 'Loading details timed out'), 'error');
         } else {
-            showToast('获取详情失败，请稍后重试', 'error');
+            showToast(localizedText('detailError', 'Failed to load details'), 'error');
         }
     } finally {
         hideLoading();
@@ -864,7 +911,7 @@ async function showDetails(id, vod_name, sourceCode = currentApiSource) {
 // 更新播放视频函数，修改为在新标签页中打开播放页面
 function playVideo(url, vod_name, episodeIndex = 0, sourceCode = currentVideoSource || currentApiSource) {
     if (!url) {
-        showToast('无效的视频链接', 'error');
+            showToast(localizedText('invalidVideoLink', 'Invalid video link'), 'error');
         return;
     }
     
@@ -903,7 +950,7 @@ function playNextEpisode() {
 // 处理播放器加载错误
 function handlePlayerError() {
     hideLoading();
-    showToast('视频播放加载失败，请尝试其他视频源', 'error');
+    showToast(localizedText('playbackLoadError', 'Video failed to load; try another source'), 'error');
 }
 
 // 新增辅助函数用于渲染剧集按钮（使用当前的排序状态）
@@ -915,7 +962,7 @@ function renderEpisodes(vodName, sourceCode = currentVideoSource || currentApiSo
         return `
             <button id="episode-${realIndex}" onclick="playVideo('${episode}','${vodName.replace(/"/g, '&quot;')}', ${realIndex}, '${String(sourceCode || '').replace(/'/g, '&#39;')}')"
                     class="px-4 py-2 bg-[#222] hover:bg-[#333] border border-[#333] rounded-lg transition-colors text-center episode-btn">
-                第${realIndex + 1}集
+                ${localizedText('episodeNumber', 'Episode {number}', { number: realIndex + 1 })}
             </button>
         `;
     }).join('');
@@ -933,7 +980,7 @@ function toggleEpisodeOrder() {
     // 更新按钮文本和箭头方向
     const toggleBtn = document.querySelector('button[onclick="toggleEpisodeOrder()"]');
     if (toggleBtn) {
-        toggleBtn.querySelector('span').textContent = episodesReversed ? '正序排列' : '倒序排列';
+        toggleBtn.querySelector('span').textContent = localizedText(episodesReversed ? 'forwardOrder' : 'reverseOrder', episodesReversed ? 'Forward order' : 'Reverse order');
         const arrowIcon = toggleBtn.querySelector('svg');
         if (arrowIcon) {
             arrowIcon.style.transform = episodesReversed ? 'rotate(180deg)' : 'rotate(0deg)';

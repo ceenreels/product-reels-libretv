@@ -8,7 +8,7 @@
     <meta property="og:type" content="website"><meta property="og:url" content="https://jumeitianxia.com/player.html"><meta property="og:title" content="剧美天下播放器"><meta property="og:description" content="剧美天下在线视频播放器。">
     <link rel="canonical" href="https://jumeitianxia.com/player.html">
     <link rel="alternate" hreflang="zh-CN" href="https://jumeitianxia.com/player.html?lang=zh-CN"><link rel="alternate" hreflang="zh-TW" href="https://jumeitianxia.com/player.html?lang=zh-TW"><link rel="alternate" hreflang="en" href="https://jumeitianxia.com/player.html?lang=en"><link rel="alternate" hreflang="x-default" href="https://jumeitianxia.com/player.html">
-    <script>(()=>{const m={"zh-CN":{t:'剧美天下播放器',d:'剧美天下在线视频播放器。'},"zh-TW":{t:'剧美天下播放器',d:'剧美天下影片播放器。'},en:{t:'剧美天下 player',d:'Watch videos with the 剧美天下 player.'}};const l=new URLSearchParams(location.search).get('lang');const x=m[l]||m['zh-CN'];document.title=x.t;document.querySelector('meta[name="description"]').content=x.d;document.querySelector('meta[property="og:title"]').content=x.t;document.querySelector('meta[property="og:description"]').content=x.d;})();</script>
+    <script>(()=>{const m={"zh-CN":{t:'剧美天下播放器',d:'剧美天下在线视频播放器。'},"zh-TW":{t:'剧美天下播放器',d:'剧美天下影片播放器。'},en:{t:'剧美天下 player',d:'Watch videos with the 剧美天下 player.'}};const q=new URLSearchParams(location.search);const persisted=localStorage.getItem('libretv:locale')||localStorage.getItem('locale')||localStorage.getItem('currentLocale');const l=persisted||q.get('locale')||q.get('lang')||((navigator.language||'zh-CN'));const key=String(l).toLowerCase().startsWith('en')?'en':String(l).toLowerCase().startsWith('zh-tw')?'zh-TW':'zh-CN';const x=m[key];document.title=x.t;document.querySelector('meta[name="description"]').content=x.d;document.querySelector('meta[property="og:title"]').content=x.t;document.querySelector('meta[property="og:description"]').content=x.d;})();</script>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="css/styles.css">
     <style>
@@ -182,13 +182,13 @@
         </div>
 
         <!-- 播放器下方响应式横幅广告 -->
-        <div id="ad-responsive-banner" class="ad-slot ad-responsive-banner player-container" aria-label="广告"></div>
+        <div id="ad-responsive-banner" class="ad-slot ad-responsive-banner player-container" data-i18n-aria-label="ad" aria-label="广告"></div>
 
         <!-- 播放器下方 300x250 广告 -->
-        <div id="ad-square-banner" class="ad-slot ad-square-banner player-container" aria-label="广告"></div>
+        <div id="ad-square-banner" class="ad-slot ad-square-banner player-container" data-i18n-aria-label="ad" aria-label="广告"></div>
 
         <!-- JuicyAds 300x250 / 300x50 响应式 Banner -->
-        <div id="ad-juicy-player-banner" class="ad-slot ad-juicy-responsive-banner player-container" aria-label="JuicyAds 广告"></div>
+        <div id="ad-juicy-player-banner" class="ad-slot ad-juicy-responsive-banner player-container" data-i18n-aria-label="juicyAd" aria-label="JuicyAds 广告"></div>
 
         <!-- 集数导航 -->
         <div class="player-container">
@@ -199,7 +199,7 @@
                     </svg>
                     <span data-i18n="previousEpisode">上一集</span>
                 </button>
-                <span class="text-gray-400" id="episodeInfo">加载中...</span>
+                <span class="text-gray-400" id="episodeInfo" data-i18n="loading">加载中...</span>
                 <button onclick="playNextEpisode()" id="nextButton" class="px-4 py-2 bg-[#222] hover:bg-[#333] border border-[#333] rounded-lg transition-colors">
                     <span data-i18n="nextEpisode">下一集</span>
                     <svg class="w-5 h-5 inline-block" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -254,7 +254,7 @@
     <script src="js/i18n/messages.js"></script>
     <script src="js/i18n/index.js"></script>
     <script>
-      document.addEventListener('DOMContentLoaded',()=>{const i=globalThis.LibretvI18n,q=new URLSearchParams(location.search),locale=i.resolveLocale({storedLocale:q.get('lang')||localStorage.getItem('libretv:locale'),browserLanguages:navigator.languages});window.playerLocale=locale;i.apply(document,locale);const s=document.getElementById('pageLocale');if(s){s.value=locale;s.addEventListener('change',()=>{localStorage.setItem('libretv:locale',s.value);const u=new URL(location.href);u.searchParams.set('lang',s.value);location.assign(u.href)})}});
+      document.addEventListener('DOMContentLoaded',()=>{const i=globalThis.LibretvI18n,q=new URLSearchParams(location.search),persisted=localStorage.getItem('libretv:locale')||localStorage.getItem('locale')||localStorage.getItem('currentLocale'),locale=i.resolveLocale({storedLocale:persisted||q.get('locale')||q.get('lang'),browserLanguages:navigator.languages});window.playerLocale=locale;i.apply(document,locale);const s=document.getElementById('pageLocale');if(s){s.value=locale;s.addEventListener('change',()=>{localStorage.setItem('libretv:locale',s.value);const u=new URL(location.href);u.searchParams.set('locale',s.value);u.searchParams.delete('lang');location.assign(u.href)})}});
     </script>
     <script>
         // 全局变量
@@ -286,7 +286,7 @@
             const index = parseInt(urlParams.get('index') || '0');
 
             // 从localStorage获取数据
-            currentVideoTitle = title || localStorage.getItem('currentVideoTitle') || '未知视频';
+            currentVideoTitle = title || localStorage.getItem('currentVideoTitle') || i18nText('unknownVideo', 'Unknown video');
             currentEpisodeIndex = index;
             
             // 设置自动连播开关状态
@@ -353,7 +353,7 @@
             if (e.altKey && e.key === 'ArrowLeft') {
                 if (currentEpisodeIndex > 0) {
                     playPreviousEpisode();
-                    showShortcutHint('上一集', 'left');
+                    showShortcutHint(i18nText('previousEpisode', 'Previous episode'), 'left');
                     e.preventDefault();
                 }
             }
@@ -362,7 +362,7 @@
             if (e.altKey && e.key === 'ArrowRight') {
                 if (currentEpisodeIndex < currentEpisodes.length - 1) {
                     playNextEpisode();
-                    showShortcutHint('下一集', 'right');
+                    showShortcutHint(i18nText('nextEpisode', 'Next episode'), 'right');
                     e.preventDefault();
                 }
             }
@@ -770,7 +770,7 @@
                 const label = globalThis.LibretvI18n ? globalThis.LibretvI18n.t('episodeList', currentLocale) : '集';
                 document.getElementById('episodeInfo').textContent = `${currentEpisodeIndex + 1}/${currentEpisodes.length} ${label}`;
             } else {
-                document.getElementById('episodeInfo').textContent = '无集数信息';
+                document.getElementById('episodeInfo').textContent = i18nText('noEpisodeInfo', 'No episode information');
             }
         }
 
@@ -808,7 +808,7 @@
             if (!episodesList) return;
             
             if (!currentEpisodes || currentEpisodes.length === 0) {
-                episodesList.innerHTML = '<div class="col-span-full text-center text-gray-400 py-8">没有可用的集数</div>';
+                episodesList.innerHTML = `<div class="col-span-full text-center text-gray-400 py-8">${i18nText('noEpisodes', 'No episodes available')}</div>`;
                 return;
             }
             
@@ -824,7 +824,7 @@
                     <button id="episode-${realIndex}" 
                             onclick="playEpisode(${realIndex})" 
                             class="px-4 py-2 ${isActive ? 'episode-active' : 'bg-[#222] hover:bg-[#333]'} border ${isActive ? 'border-blue-500' : 'border-[#333]'} rounded-lg transition-colors text-center episode-btn">
-                        第${realIndex + 1}集
+                        ${i18nText('episodeNumber', 'Episode {number}').replace('{number}', realIndex + 1)}
                     </button>
                 `;
             });
