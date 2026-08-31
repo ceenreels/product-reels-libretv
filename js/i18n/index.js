@@ -21,11 +21,12 @@
   function resolveRegion(opts) {
     opts = opts || {};
     var valid = { CN:1, TW:1, HK:1, SG:1, GLOBAL_EN:1, GLOBAL_ZH:1 };
-    if (valid[opts.storedRegion]) return opts.storedRegion;
+    var storedRegion = String(opts.storedRegion || '').toUpperCase();
+    if (Object.prototype.hasOwnProperty.call(valid, storedRegion)) return storedRegion;
     var list = langs(opts.browserLanguages);
     for (var i = 0; i < list.length; i++) {
       var m = String(list[i] || '').match(/^[^-_]+[-_]([A-Za-z]{2})/);
-      if (m && valid[m[1].toUpperCase()]) return m[1].toUpperCase();
+      if (m && Object.prototype.hasOwnProperty.call(valid, m[1].toUpperCase())) return m[1].toUpperCase();
     }
     var locale = normalize(opts.locale) || resolveLocale(opts);
     return locale === 'en' ? 'GLOBAL_EN' : 'GLOBAL_ZH';

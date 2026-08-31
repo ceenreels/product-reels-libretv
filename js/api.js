@@ -56,6 +56,14 @@ function buildProxyUrl(targetUrl) {
     return `${PROXY_URL}${encodeURIComponent(targetUrl)}`;
 }
 
+function hasOwnApiSource(source) {
+    return Object.prototype.hasOwnProperty.call(API_SITES, source);
+}
+
+function isEnabledApiSource(source) {
+    return hasOwnApiSource(source) && API_SITES[source] && API_SITES[source].enabled !== false;
+}
+
 function getRoutingContext(url) {
     if (typeof LibretvRouting !== 'undefined' && LibretvRouting.getRequestContext) {
         return LibretvRouting.getRequestContext(url);
@@ -83,7 +91,7 @@ function isValidCoverUrl(value) {
 // 苹果CMS的列表接口经常省略 vod_pic。详情接口仍会返回封面，
 // 因此首页推荐在缺少封面时批量补查详情，而不是把空字段直接传给前端。
 async function fetchRecommendationCovers(sourceCode, videoIds) {
-    if (!API_SITES[sourceCode] || !videoIds.length) return new Map();
+    if (!isEnabledApiSource(sourceCode) || !videoIds.length) return new Map();
 
     const detailUrl = `${API_SITES[sourceCode].api}${API_CONFIG.detail.path}${videoIds.join(',')}`;
     const controller = new AbortController();
@@ -171,13 +179,13 @@ async function handleApiRequest(url) {
             if (source === 'custom' && !customApi) {
                 throw new Error('使用自定义API时必须提供API地址');
             }
-            
-            if (!API_SITES[source] && source !== 'custom' && source !== 'aggregated') {
-                throw new Error('无效的API来源');
+            const context = getRoutingContext(url);
+            const hasExplicitSource = url.searchParams.has('source');
+            if (source !== 'custom' && source !== 'aggregated' && !isEnabledApiSource(source) && (hasExplicitSource || (context.sourceMode !== 'aggregated' && context.sourceMode !== 'region'))) {
+                throw new Error('无效或已禁用的API来源');
             }
             
             // 处理聚合搜索
-            const context = getRoutingContext(url);
             if (source === 'aggregated' || context.sourceMode === 'aggregated' || context.sourceMode === 'region') {
                 if (context.sourceMode === 'custom') return await handleMultipleCustomSearch(searchQuery, customApi);
                 if (source !== 'aggregated' && context.sourceMode === 'region' && context.selectedSource) {
@@ -239,7 +247,7 @@ async function handleApiRequest(url) {
                 });
             } catch (fetchError) {
                 clearTimeout(timeoutId);
-                if (source !== 'custom' && API_SITES[source]) markSourceFailure(source);
+                if (source !== 'custom' && isEnabledApiSource(source)) markSourceFailure(source);
                 throw fetchError;
             }
         }
@@ -252,15 +260,17 @@ async function handleApiRequest(url) {
             }
             const plan = getSourcePlan({ ...context, capability: 'recommendations' });
             const routed = context.sourceMode === 'aggregated' || context.sourceMode === 'region';
-            const sourceCandidates = routed ? plan.primary.concat(plan.fallback) : [API_SITES[requestedSource] ? requestedSource : DEFAULT_API_SOURCE];
+            const hasExplicitSource = url.searchParams.has('source');
+            if (hasExplicitSource && requestedSource !== 'aggregated' && !isEnabledApiSource(requestedSource)) throw new Error('无效或已禁用的API来源');
+            if (!routed && !isEnabledApiSource(requestedSource)) throw new Error('无效或已禁用的API来源');
+            const sourceCandidates = routed ? plan.primary.concat(plan.fallback) : [requestedSource];
             attemptedRoutingSources = sourceCandidates.slice();
             const page = Math.max(1, Number.parseInt(url.searchParams.get('page') || '1', 10) || 1);
-            let sourceCode = '', data = null, emptyData = null, emptySource = '', fellBack = false, usedSources = [];
+            let sourceCode = '', data = null, emptyData = null, emptySource = '', emptyFellBack = false, fellBack = false, usedSources = [];
             for (let i = 0; i < sourceCandidates.length; i++) {
                 const candidate = sourceCandidates[i];
-                if (!API_SITES[candidate]) continue;
+                if (!isEnabledApiSource(candidate)) continue;
                 try {
-                    if (routed && i >= plan.primary.length) routingFellBack = true;
                     const detailUrl = `${API_SITES[candidate].api}${API_CONFIG.recommendations.path}${page}`;
                     const controller = new AbortController();
                     const timeoutId = setTimeout(() => controller.abort(), API_REQUEST_TIMEOUT);
@@ -274,16 +284,23 @@ async function handleApiRequest(url) {
                     const payload = await readApiResponse(response);
                     if (!payload || !Array.isArray(payload.list)) throw new Error('推荐接口返回的数据格式无效');
                     markSourceSuccess(candidate);
-                    if (!payload.list.length) { emptyData = payload; emptySource = candidate; continue; }
-                    usedSources.push(candidate);
+                    if (!payload.list.length) { emptyData = payload; emptySource = candidate; emptyFellBack = routed && i >= plan.primary.length; continue; }
+                    usedSources = [candidate];
                     routingUsedSources = usedSources.slice();
-                    sourceCode = candidate; data = payload; fellBack = routed && i >= plan.primary.length;
+                    sourceCode = candidate; data = payload; fellBack = routed && i >= plan.primary.length; routingFellBack = fellBack;
                     break;
                 } catch (error) {
                     markSourceFailure(candidate);
                 }
             }
-            if (!data && emptyData) { data = emptyData; sourceCode = emptySource; usedSources.push(emptySource); fellBack = routed && plan.primary.indexOf(emptySource) < 0; }
+            if (!data && emptyData) {
+                data = emptyData;
+                sourceCode = emptySource;
+                usedSources = [emptySource];
+                fellBack = emptyFellBack;
+                routingUsedSources = usedSources.slice();
+                routingFellBack = fellBack;
+            }
             if (!data) throw new Error('推荐内容加载失败');
             await enrichRecommendationCovers(data.list.slice(0, 12), sourceCode);
             data.list.forEach(item => { item.source_name = API_SITES[sourceCode].name; item.source_code = sourceCode; });
@@ -310,8 +327,8 @@ async function handleApiRequest(url) {
                 throw new Error('使用自定义API时必须提供API地址');
             }
             
-            if (!API_SITES[sourceCode] && sourceCode !== 'custom') {
-                throw new Error('无效的API来源');
+            if (sourceCode !== 'custom' && !isEnabledApiSource(sourceCode)) {
+                throw new Error('无效或已禁用的API来源');
             }
 
             const detailUrl = customApi
@@ -396,7 +413,7 @@ async function handleApiRequest(url) {
                 });
             } catch (fetchError) {
                 clearTimeout(timeoutId);
-                if (sourceCode !== 'custom' && API_SITES[sourceCode]) markSourceFailure(sourceCode);
+                if (sourceCode !== 'custom' && isEnabledApiSource(sourceCode)) markSourceFailure(sourceCode);
                 throw fetchError;
             }
         }
@@ -565,7 +582,7 @@ async function handleAggregatedSearch(searchQuery, context) {
     context = context || { locale: 'zh-CN', region: 'GLOBAL_ZH', sourceMode: 'aggregated', selectedSource: '' };
     const plan = getSourcePlan({ ...context, capability: 'search' });
     const requestedSources = plan.primary.concat(plan.fallback);
-    if (!requestedSources.length) return JSON.stringify({ code: 200, list: [], msg: '没有可用的API源', routing: { locale: context.locale, region: context.region, requestedSources, usedSources: [], fellBack: false } });
+    if (!requestedSources.length) return JSON.stringify({ code: 200, list: [], msg: '没有可用的API源', routing: { locale: context.locale, region: context.region, requestedSources, usedSources: [], fellBack: false, noEligibleSources: true } });
 
     const fetchSource = async source => {
         try {
@@ -602,7 +619,7 @@ async function handleAggregatedSearch(searchQuery, context) {
     const seen = new Set();
     allResults.forEach(item => { const key = `${item.source_code}_${item.vod_id}`; if (!seen.has(key)) { seen.add(key); uniqueResults.push(item); } });
     uniqueResults.sort((a, b) => (a.vod_name || '').localeCompare(b.vod_name || '') || (a.source_name || '').localeCompare(b.source_name || ''));
-    return JSON.stringify({ code: 200, list: uniqueResults, routing: { locale: context.locale, region: context.region, requestedSources, usedSources, fellBack } });
+    return JSON.stringify({ code: 200, list: uniqueResults, routing: { locale: context.locale, region: context.region, requestedSources, usedSources, fellBack, noEligibleSources: false } });
 }
 
 // 新增：处理多个自定义API源的聚合搜索

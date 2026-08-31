@@ -2,6 +2,7 @@
   var fallbackRules = { CN: ['ffzy','tyyszy','zy360','jisu'], TW: ['tyyszy','zy360'], HK: ['tyyszy','zy360'], SG: ['ffzy','tyyszy'], GLOBAL_EN: [], GLOBAL_ZH: [] };
   var HEALTH_TTL = 5 * 60 * 1000;
   var health = Object.create(null);
+  function hasOwn(obj, key) { return obj != null && Object.prototype.hasOwnProperty.call(obj, key); }
   function sourceMap() {
     if (root.API_SITES) return root.API_SITES;
     try { return typeof API_SITES !== 'undefined' ? API_SITES : {}; } catch (_) { return {}; }
@@ -23,7 +24,7 @@
   }
   function getEligibleSources(opts) {
     opts = opts || {}; var map=sourceMap(), mode=opts.mode || 'region', selected=opts.selectedSource, capability=opts.capability || 'search', ids=Object.keys(map);
-    if (mode === 'manual') return selected && map[selected] ? [selected] : [];
+    if (mode === 'manual') return selected && hasOwn(map, selected) && info(selected, map[selected], 0).enabled ? [selected] : [];
     var rules = root.REGION_SOURCE_RULES || fallbackRules;
     try { if (typeof REGION_SOURCE_RULES !== 'undefined') rules = REGION_SOURCE_RULES; } catch (_) {}
     var preferred = rules[opts.region] || [];
@@ -68,7 +69,7 @@
     var map = sourceMap();
     var rawMode = String(params.get('sourceMode') || '').toLowerCase();
     var source = String(params.get('source') || '');
-    var sourceKnown = source && Object.prototype.hasOwnProperty.call(map, source) && source !== 'custom' && source !== 'aggregated';
+    var sourceKnown = source && hasOwn(map, source) && info(source, map[source], 0).enabled && source !== 'custom' && source !== 'aggregated';
     var sourceMode = ['aggregated','region','manual','custom'].indexOf(rawMode) >= 0 ? rawMode : (source === 'custom' ? 'custom' : source === 'aggregated' ? 'aggregated' : sourceKnown ? 'manual' : 'region');
     return { locale: locale, region: region, sourceMode: sourceMode, selectedSource: sourceMode === 'manual' && sourceKnown ? source : '' };
   }
@@ -87,5 +88,5 @@
     if (mode === 'region' && primary.length > 1) primary = primary.slice(0, 1);
     return { primary: primary, fallback: fallback };
   }
-  root.LibretvRouting={resolveSourceMode:function(o){o=o||{}; var map=sourceMap(); if (o.storedMode==='manual'||o.storedMode==='aggregated'||o.storedMode==='region') return o.storedMode; return (o.storedSource && Object.prototype.hasOwnProperty.call(map,o.storedSource)) ? 'manual' : 'region';},getEligibleSources:getEligibleSources,getFallbackSources:getFallbackSources,recordSourceSuccess:recordSourceSuccess,recordSourceFailure:recordSourceFailure,isSourceHealthy:isSourceHealthy,getRequestContext:getRequestContext,buildSourcePlan:buildSourcePlan};
+  root.LibretvRouting={resolveSourceMode:function(o){o=o||{}; var map=sourceMap(); if (o.storedMode==='manual'||o.storedMode==='aggregated'||o.storedMode==='region') return o.storedMode; return (o.storedSource && hasOwn(map,o.storedSource) && info(o.storedSource,map[o.storedSource],0).enabled) ? 'manual' : 'region';},getEligibleSources:getEligibleSources,getFallbackSources:getFallbackSources,recordSourceSuccess:recordSourceSuccess,recordSourceFailure:recordSourceFailure,isSourceHealthy:isSourceHealthy,getRequestContext:getRequestContext,buildSourcePlan:buildSourcePlan};
 })(globalThis);
