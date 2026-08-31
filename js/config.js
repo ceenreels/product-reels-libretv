@@ -26,42 +26,70 @@ const API_SITES = {
     heimuer: {
         api: 'https://json.heimuer.xyz',
         name: '黑木耳',
-        detail: 'https://heimuer.tv'
+        detail: 'https://heimuer.tv',
+        languages: ['zh-CN'], regions: ['CN','TW','HK','SG','GLOBAL_ZH'], priority: 70,
+        capabilities: { search: true, detail: true, recommendations: true }, enabled: true, defaultEligible: false
     },
     ffzy: {
         api: 'http://ffzy5.tv',
         name: '非凡影视',
-        detail: 'http://ffzy5.tv'
+        detail: 'http://ffzy5.tv',
+        languages: ['zh-CN'], regions: ['CN','SG','GLOBAL_ZH'], priority: 100,
+        capabilities: { search: true, detail: true, recommendations: true }, enabled: true, defaultEligible: true
     },
     tyyszy: {
         api: 'https://tyyszy.com',
         name: '天涯资源',
+        languages: ['zh-CN'], regions: ['CN','TW','HK','SG','GLOBAL_ZH'], priority: 95,
+        capabilities: { search: true, detail: true, recommendations: true }, enabled: true, defaultEligible: true
     },
     ckzy: {
         api: 'https://www.ckzy1.com',
         name: 'CK资源',
+        languages: ['zh-CN'], regions: ['CN','TW','HK','SG','GLOBAL_ZH'], priority: 90,
+        capabilities: { search: true, detail: true, recommendations: true }, enabled: true, defaultEligible: true
     },
     zy360: {
         api: 'https://360zy.com',
         name: '360资源',
+        languages: ['zh-CN'], regions: ['CN','TW','HK','SG','GLOBAL_ZH'], priority: 85,
+        capabilities: { search: true, detail: true, recommendations: true }, enabled: true, defaultEligible: true
     },
     wolong: {
         api: 'https://wolongzyw.com',
         name: '卧龙资源',
+        languages: ['zh-CN'], regions: ['CN','TW','HK','SG','GLOBAL_ZH'], priority: 75,
+        capabilities: { search: true, detail: true, recommendations: true }, enabled: true, defaultEligible: false
     },
     cjhw: {
         api: 'https://cjhwba.com',
         name: '新华为',
+        languages: ['zh-CN'], regions: ['CN','TW','HK','SG','GLOBAL_ZH'], priority: 60,
+        capabilities: { search: true, detail: true, recommendations: true }, enabled: true, defaultEligible: false
     },
     jisu: {
         api: 'https://jszyapi.com',
         name: '极速资源',
-        detail: 'https://jszyapi.com'
+        detail: 'https://jszyapi.com',
+        languages: ['zh-CN'], regions: ['CN','SG','GLOBAL_ZH'], priority: 80,
+        capabilities: { search: true, detail: true, recommendations: true }, enabled: true, defaultEligible: true
     },
     dbzy: {
         api: 'https://dbzy.com',
         name: '豆瓣资源',
+        languages: ['zh-CN'], regions: ['CN','TW','HK','SG','GLOBAL_ZH'], priority: 50,
+        capabilities: { search: true, detail: true, recommendations: true }, enabled: true, defaultEligible: false
     }
+};
+
+// Region preference order. Add a verified English source by extending this map and its metadata.
+const REGION_SOURCE_RULES = {
+    CN: ['ffzy', 'tyyszy', 'ckzy', 'zy360', 'jisu'],
+    TW: ['tyyszy', 'ckzy', 'zy360'],
+    HK: ['tyyszy', 'ckzy', 'zy360'],
+    SG: ['ffzy', 'tyyszy', 'ckzy', 'zy360', 'jisu'],
+    GLOBAL_ZH: ['tyyszy', 'ckzy', 'zy360', 'ffzy', 'jisu'],
+    GLOBAL_EN: []
 };
 
 // 添加聚合搜索的配置选项

@@ -41,3 +41,26 @@ test('invalid stored source does not force manual mode', async () => {
   assert.equal(sandbox.LibretvRouting.resolveSourceMode({ storedSource: '__proto__' }), 'region');
   assert.equal(sandbox.LibretvRouting.resolveSourceMode({ storedMode: 'manual', storedSource: 'missing' }), 'manual');
 });
+
+test('regional routing keeps only matching default-eligible sources', async () => {
+  const sandbox = await loadScripts(['js/config.js', 'js/source-routing.js']);
+  const result = sandbox.LibretvRouting.getEligibleSources({ locale: 'zh-CN', region: 'CN', mode: 'aggregated' });
+  assert.ok(result.includes('ffzy'));
+  assert.ok(result.includes('jisu'));
+  assert.ok(!result.includes('cjhw'));
+  assert.ok(!result.includes('dbzy'));
+});
+
+test('legacy concrete source selection becomes manual mode', async () => {
+  const sandbox = await loadScripts(['js/config.js', 'js/source-routing.js']);
+  assert.equal(sandbox.LibretvRouting.resolveSourceMode({ storedMode: '', storedSource: 'ffzy' }), 'manual');
+  assert.equal(sandbox.LibretvRouting.resolveSourceMode({ storedMode: '', storedSource: '' }), 'region');
+});
+
+test('English users fall back without pretending Chinese sources are English', async () => {
+  const sandbox = await loadScripts(['js/config.js', 'js/source-routing.js']);
+  const primary = sandbox.LibretvRouting.getEligibleSources({ locale: 'en', region: 'GLOBAL_EN', mode: 'aggregated' });
+  const fallback = sandbox.LibretvRouting.getFallbackSources({ locale: 'en', region: 'GLOBAL_EN' });
+  assert.equal(primary.length, 0);
+  assert.ok(fallback.length > 0);
+});
