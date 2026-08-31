@@ -43,6 +43,45 @@ LibreTV 默认支持以下几种视频源接口：
 - 天涯资源 (tyyszy)
 - …
 
+### 🌏 语言与地区路由（第一阶段）
+
+当前公开的界面语言只有以下三种：
+
+| locale | 界面 | 默认地区路由 |
+| --- | --- | --- |
+| `zh-CN` | 简体中文 | `CN`（中国大陆规则） |
+| `zh-TW` | 繁體中文 | `TW`；`HK` 也使用繁体中文规则 |
+| `en` | English | `GLOBAL_EN` |
+
+入口参数 `?lang=zh-CN`、`?lang=zh-TW`、`?lang=en` 只用于提示入口语言；用户在设置中明确选择后，保存在浏览器本地的选择优先，刷新不会清除搜索历史、播放设置或广告设置。地区同样可以手动切换，浏览器语言只用于首次推断，不等同于 IP 定位。
+
+`GLOBAL_EN` 目前没有登记并验证过的英文视频源。英文界面会显示 `en · GLOBAL_EN` 路由状态；没有英文主源而发生回退时，再显示本地化的备用来源提示，并按健康状态使用 `GLOBAL_ZH` 等全球中文源。视频标题、简介和演员信息仍保留源站原文，不会把中文视频标成英文。地区无匹配源时，系统依次尝试同语言的健康源和全球回退源；如果全部不可用，搜索返回空结果并提示更换关键词/数据源，推荐区域显示对应语言的不可用提示，同时仍允许用户手动选择一个 `enabled` 的来源。
+
+源健康记录只在浏览器内短期生效，TTL 为 5 分钟；一次超时或格式错误不会永久修改配置。聚合搜索和推荐只请求当前地区规则中 `defaultEligible: true` 且健康的来源，单个来源失败不会清空其他成功结果。
+
+### ➕ 新增来源前的元数据与验证
+
+新增来源前请在 `js/config.js` 的 `API_SITES` 中填写完整元数据，并保持稳定的来源 ID（详情页和历史缓存会使用它）：
+
+```js
+newSource: {
+  name: '显示名称',
+  languages: ['zh-CN'],
+  regions: ['CN', 'GLOBAL_ZH'],
+  priority: 50,
+  api: 'https://example.com',
+  detail: 'https://example.com',
+  capabilities: { search: true, detail: true, recommendations: true },
+  enabled: true,
+  defaultEligible: false
+  // 可选：adapter 或格式标识（非 AppleCMS 接口时说明转换方式）
+}
+```
+
+必填语义是 `name`、`languages`、`regions`、`priority`、`api`、详情地址/接口能力、`enabled` 和 `defaultEligible`。`enabled` 是运营开关：设为 `false` 时来源不会出现在手动选择或自动路由中；`defaultEligible` 决定是否能被地区推荐和聚合搜索自动选中，设为 `false` 时只要 `enabled` 仍为 `true`，用户仍可手动选择。
+
+只有在真实响应上分别验证 **search、detail、playback**（并确认内容授权、稳定性和接口格式）之后，才能把 `defaultEligible` 改为 `true`，再将来源加入相应的 `REGION_SOURCE_RULES`。本仓库目前只记录已存在的中文来源；不要把未经验证的英文、日文、韩文或其他国际来源写入公开规则。
+
 ### CMS采集站源兼容性
 
 本项目支持标准的苹果CMS V10 API格式。自定义API需遵循以下格式：

@@ -4,6 +4,7 @@ function toggleSettings(e) {
     e && e.stopPropagation();
     const panel = document.getElementById('settingsPanel');
     panel.classList.toggle('show');
+    panel.setAttribute('aria-hidden', panel.classList.contains('show') ? 'false' : 'true');
 }
 
 // 改进的Toast显示函数 - 支持队列显示多个Toast

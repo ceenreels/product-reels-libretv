@@ -70,14 +70,14 @@
                 <p id="routeStatus" class="text-xs text-gray-500" aria-live="polite"></p>
             </div>
             <div>
-                <label class="block text-sm font-medium text-gray-400 mb-2" data-i18n="chooseSource">选择采集站点</label>
+                <label class="block text-sm font-medium text-gray-400 mb-2" for="apiSource" data-i18n="chooseSource">选择采集站点</label>
                 <select id="apiSource" class="w-full bg-[#222] border border-[#333] text-white px-3 py-2 rounded-lg focus:outline-none focus:border-white transition-colors"></select>
             
             </div>
             
             <!-- 添加自定义接口输入框 -->
             <div id="customApiInput" class="hidden">
-                <label class="block text-sm font-medium text-gray-400 mb-2" data-i18n="customApiLabel">自定义接口地址(可添加多个，用逗号分隔)</label>
+                <label class="block text-sm font-medium text-gray-400 mb-2" for="customApiUrl" data-i18n="customApiLabel">自定义接口地址(可添加多个，用逗号分隔)</label>
                 <input 
                     type="text" 
                     id="customApiUrl" 

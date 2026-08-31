@@ -10,6 +10,7 @@ const stylesCss = await readFile(new URL('../css/styles.css', import.meta.url), 
 const privacyHtml = await readFile(new URL('../privacy.html', import.meta.url), 'utf8');
 const aboutHtml = await readFile(new URL('../about.html', import.meta.url), 'utf8');
 const appJs = await readFile(new URL('../js/app.js', import.meta.url), 'utf8');
+const uiJs = await readFile(new URL('../js/ui.js', import.meta.url), 'utf8');
 
 test('all public pages expose language metadata and privacy mentions locale preferences', () => {
   for (const html of [indexHtml, playerHtml, aboutHtml, privacyHtml]) {
@@ -37,6 +38,29 @@ test('homepage marks static copy and aria labels for all locales', () => {
   assert.match(indexHtml, /data-i18n-aria-label="closeSettings"/);
   assert.match(indexHtml, /data-i18n-aria-label="closeModal"/);
   assert.match(indexHtml, /data-i18n-aria-label="ad"/);
+});
+
+test('homepage select and custom URL labels are associated for accessibility', () => {
+  assert.match(indexHtml, /<label[^>]+for="apiSource"[^>]*>/);
+  assert.match(indexHtml, /<label[^>]+for="customApiUrl"[^>]*>/);
+});
+
+test('settings panel aria-hidden follows its expanded state', async () => {
+  const vm = await import('node:vm');
+  const state = { expanded: false, ariaHidden: 'true' };
+  const panel = {
+    classList: {
+      toggle(name) { assert.equal(name, 'show'); state.expanded = !state.expanded; },
+      contains(name) { return name === 'show' && state.expanded; }
+    },
+    setAttribute(name, value) { if (name === 'aria-hidden') state.ariaHidden = value; }
+  };
+  const sandbox = { document: { getElementById(id) { assert.equal(id, 'settingsPanel'); return panel; } } };
+  vm.runInNewContext(uiJs, sandbox, { filename: 'js/ui.js' });
+  sandbox.toggleSettings({ stopPropagation() {} });
+  assert.equal(state.ariaHidden, 'false');
+  sandbox.toggleSettings();
+  assert.equal(state.ariaHidden, 'true');
 });
 
 test('homepage source controls are populated from API_SITES at startup', () => {
