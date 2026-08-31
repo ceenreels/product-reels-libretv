@@ -2,8 +2,8 @@
 
 Implemented homepage locale, region, and source-mode controls with persistence keys, browser/legacy migration, translated DOM aria handling, route status, SEO hreflang links, and responsive styling.
 
-Commit: `1c7ed9aa87732fb5afb0509337e5fbab5759ea96`
+Commit: `2042244a39f42c6511fb95ac7182f67848aa8dba`
 
-Tests: `node --test tests/ads-html.test.js tests/i18n-routing.test.js` (29 passed).
+Tests: `node --test tests/ads-html.test.js tests/i18n-routing.test.js` (35 passed); `npm test` (46 passed).
 
-Remaining risk: recommendation fallback status is currently represented by route status when explicitly supplied; metadata text uses concise localized title/description values.
+Fix round completed: routing now honors persisted `libretv:*` controls, source mode and custom API state stay synchronized, source options are populated from `API_SITES`, cache keys include full routing context, fallback status is surfaced for success/cache/error paths, and homepage copy/ARIA/SEO metadata are localized for all supported locales.

@@ -33,6 +33,21 @@ test('locale resolution prefers stored selection and falls back by language', as
   assert.equal(sandbox.LibretvI18n.resolveLocale({ storedLocale: '', browserLanguages: ['fr-FR'] }), 'en');
 });
 
+test('URL lang is an entry hint while persisted locale remains authoritative', async () => {
+  const sandbox = await loadScripts(['js/i18n/messages.js', 'js/i18n/index.js']);
+  assert.equal(sandbox.LibretvI18n.getUrlLocale('?lang=en'), 'en');
+  assert.equal(sandbox.LibretvI18n.resolveLocale({ storedLocale: 'zh-TW', browserLanguages: ['en-US'] }), 'zh-TW');
+  assert.equal(sandbox.LibretvI18n.resolveLocale({ storedLocale: '', browserLanguages: ['en-US'] }), 'en');
+});
+
+test('route status and metadata messages are localized in every supported locale', async () => {
+  const sandbox = await loadScripts(['js/i18n/messages.js', 'js/i18n/index.js']);
+  for (const locale of ['zh-CN', 'zh-TW', 'en']) {
+    assert.ok(sandbox.LibretvI18n.t('routeStatus', locale).length > 2);
+    assert.ok(sandbox.LibretvI18n.t('siteDescription', locale).length > 10);
+  }
+});
+
 test('region resolution maps locale regions and language groups', async () => {
   const sandbox = await loadScripts(['js/i18n/messages.js', 'js/i18n/index.js']);
   assert.equal(sandbox.LibretvI18n.resolveRegion({ storedRegion: '', locale: 'zh-TW', browserLanguages: ['zh-TW'] }), 'TW');

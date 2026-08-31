@@ -32,6 +32,21 @@ function parseCustomApiUrls() {
         .slice(0, CUSTOM_API_CONFIG.maxSources);
 }
 
+function populateApiSourceOptions() {
+    const select = document.getElementById('apiSource');
+    if (!select || typeof API_SITES === 'undefined') return;
+    const selected = currentApiSource;
+    select.innerHTML = '';
+    [['region','regionalRecommendation'],['aggregated','aggregated'],['custom','customApi']].forEach(([value,key]) => {
+        const option = document.createElement('option'); option.value = value; option.dataset.i18n = key; option.textContent = LibretvI18n?.t(key, currentLocale) || value; select.appendChild(option);
+    });
+    Object.entries(API_SITES).forEach(([id, site]) => {
+        if (site && site.enabled === false) return;
+        const option = document.createElement('option'); option.value = id; option.textContent = `${site.name || id} (${id})`; select.appendChild(option);
+    });
+    select.value = Array.from(select.options).some(o => o.value === selected) ? selected : (sourceMode === 'region' ? 'region' : DEFAULT_API_SOURCE);
+}
+
 // 页面初始化
 document.addEventListener('DOMContentLoaded', function() {
     const hasPersistedLocale = !!(localStorage.getItem('libretv:locale') || localStorage.getItem('locale') || localStorage.getItem('currentLocale'));
@@ -39,9 +54,11 @@ document.addEventListener('DOMContentLoaded', function() {
     currentLocale = (typeof LibretvI18n !== 'undefined' ? LibretvI18n.resolveLocale({storedLocale: currentLocale, browserLanguages: navigator.languages}) : (currentLocale || 'zh-CN'));
     currentRegion = (typeof LibretvI18n !== 'undefined' ? LibretvI18n.resolveRegion({storedRegion: currentRegion, locale: currentLocale, browserLanguages: navigator.languages}) : (currentRegion || 'GLOBAL_ZH'));
     if (!sourceMode) sourceMode = (storedApiSource && API_SITES[storedApiSource]) ? 'manual' : 'region';
+    if (sourceMode === 'region' || sourceMode === 'aggregated' || sourceMode === 'custom') currentApiSource = sourceMode;
     if (sourceMode === 'manual' && !API_SITES[currentApiSource]) currentApiSource = DEFAULT_API_SOURCE;
     localStorage.setItem('libretv:locale', currentLocale); localStorage.setItem('libretv:region', currentRegion); localStorage.setItem('libretv:sourceMode', sourceMode);
     LibretvI18n?.apply(document, currentLocale);
+    populateApiSourceOptions();
     updateMetadata();
     const localeEl=document.getElementById('localeSelect'), regionEl=document.getElementById('regionSelect'), modeEl=document.getElementById('sourceModeSelect');
     if(localeEl) localeEl.value=currentLocale; if(regionEl) regionEl.value=currentRegion; if(modeEl) modeEl.value=sourceMode;
@@ -59,7 +76,10 @@ document.addEventListener('DOMContentLoaded', function() {
     document.getElementById('currentCode').textContent = currentApiSource;
     
     // 初始化显示当前站点状态（使用优化后的测试函数）
-    updateSiteStatusWithTest(currentApiSource);
+    const statusSource = (currentApiSource === 'region' || currentApiSource === 'aggregated')
+        ? (LibretvRouting?.buildSourcePlan?.({locale: currentLocale, region: currentRegion, sourceMode:'region', capability:'search'})?.primary?.[0] || DEFAULT_API_SOURCE)
+        : currentApiSource;
+    updateSiteStatusWithTest(statusSource);
 
     // 首页加载热门推荐
     loadRecommendations();
@@ -90,12 +110,13 @@ function updateRouteStatus(fallback) {
     el.textContent = `${label}: ${currentLocale} · ${currentRegion} · ${sourceMode}${fallback ? ' · ' + (LibretvI18n?.t('fallback', currentLocale, 'fallback')) : ''}`;
 }
 function updateMetadata() {
-    const title = LibretvI18n?.t('search', currentLocale, 'Video search') || 'Video search';
-    const descText = LibretvI18n?.t('recommendationDescription', currentLocale, title) || title;
-    document.title = `${title} - 剧美天下`;
+    const title = LibretvI18n?.t('siteTitle', currentLocale, 'Video search') || 'Video search';
+    const descText = LibretvI18n?.t('siteDescription', currentLocale, LibretvI18n?.t('recommendationDescription', currentLocale, title)) || title;
+    document.title = title;
     const desc = document.querySelector('meta[name="description"]'); if (desc) desc.content = descText;
     const og = document.querySelector('meta[property="og:title"]'); if (og) og.content = document.title;
     const ogd = document.querySelector('meta[property="og:description"]'); if (ogd) ogd.content = descText;
+    const tw = document.querySelector('meta[property="twitter:title"]'); if (tw) tw.content = document.title;
     const twd = document.querySelector('meta[property="twitter:description"]'); if (twd) twd.content = descText;
 }
 
@@ -107,8 +128,8 @@ function getPageRoutingParams(sourceOverride) {
     const mode = sourceMode || (source === 'custom' ? 'custom' : source === 'aggregated' ? 'aggregated' : 'manual');
     let locale = currentLocale, region = currentRegion;
     try {
-        const storedLocale = currentLocale || localStorage.getItem('libretv:locale') || localStorage.getItem('locale') || localStorage.getItem('currentLocale') || '';
-        const storedRegion = currentRegion || localStorage.getItem('libretv:region') || localStorage.getItem('region') || localStorage.getItem('currentRegion') || '';
+        const storedLocale = localStorage.getItem('libretv:locale') || localStorage.getItem('locale') || localStorage.getItem('currentLocale') || currentLocale || '';
+        const storedRegion = localStorage.getItem('libretv:region') || localStorage.getItem('region') || localStorage.getItem('currentRegion') || currentRegion || '';
         locale = (typeof LibretvI18n !== 'undefined' && LibretvI18n.resolveLocale)
             ? LibretvI18n.resolveLocale({ storedLocale, browserLanguages: navigator.languages }) : (storedLocale || locale);
         region = (typeof LibretvI18n !== 'undefined' && LibretvI18n.resolveRegion)
@@ -128,11 +149,12 @@ async function loadRecommendations() {
     const source = currentApiSource === 'custom' || currentApiSource === 'aggregated'
         ? DEFAULT_API_SOURCE
         : currentApiSource;
-    const planKey = (typeof LibretvRouting !== 'undefined' && LibretvRouting.buildSourcePlan) ? LibretvRouting.buildSourcePlan({locale: currentLocale, region: currentRegion, sourceMode}).primary.join(',') : sourceMode;
-    const cacheKey = `${currentLocale}:${currentRegion}:${sourceMode}:${planKey}:page:${recommendationPage}`;
+    const plan = (typeof LibretvRouting !== 'undefined' && LibretvRouting.buildSourcePlan) ? LibretvRouting.buildSourcePlan({locale: currentLocale, region: currentRegion, sourceMode, selectedSource: currentApiSource, capability:'recommendations'}) : {primary:[], fallback:[]};
+    const planKey = [...(plan.primary || []), '|', ...(plan.fallback || [])].join(',');
+    const cacheKey = `locale=${currentLocale}&region=${currentRegion}&mode=${sourceMode}&source=${currentApiSource}&custom=${encodeURIComponent(customApiUrl)}&plan=${planKey}&page=${recommendationPage}`;
 
     area.classList.remove('hidden');
-    container.innerHTML = '<div class="col-span-full text-center text-gray-500 py-8">推荐内容加载中...</div>';
+    container.innerHTML = `<div class="col-span-full text-center text-gray-500 py-8">${LibretvI18n?.t('recommendationLoading', currentLocale, 'Loading recommendations...')}</div>`;
 
     try {
         const routeSource = currentApiSource === 'aggregated' ? 'aggregated' : source;
@@ -140,7 +162,7 @@ async function loadRecommendations() {
         const routeParams = getPageRoutingParams(routeSource);
         const query = new URLSearchParams(routeParams);
         query.set('sourceMode', routeMode);
-        if (routeMode === 'custom') query.set('source', source);
+        if (routeMode === 'custom') query.set('source', 'custom');
         if (routeMode === 'custom' && customApiUrl) query.set('customApi', customApiUrl);
         query.set('page', recommendationPage);
         const response = await fetch(`/api/recommendations?${query.toString()}`);
@@ -157,10 +179,11 @@ async function loadRecommendations() {
         console.error('加载推荐内容失败:', error);
         const cachedItems = recommendationCache?.read(cacheKey, RECOMMENDATION_CACHE_TTL);
         if (cachedItems?.length) {
-            renderRecommendations(cachedItems); updateRouteStatus(false);
+            renderRecommendations(cachedItems); updateRouteStatus(true);
             return;
         }
-        container.innerHTML = '<div class="col-span-full text-center text-gray-500 py-8">暂时无法加载推荐内容，请稍后重试</div>';
+        container.innerHTML = `<div class="col-span-full text-center text-gray-500 py-8">${LibretvI18n?.t('recommendationError', currentLocale, 'Recommendations unavailable')}</div>`;
+        updateRouteStatus(true);
     }
 }
 
@@ -170,7 +193,7 @@ function renderRecommendations(items) {
 
     container.innerHTML = '';
     if (!items.length) {
-        container.innerHTML = '<div class="col-span-full text-center text-gray-500 py-8">暂无推荐内容</div>';
+        container.innerHTML = `<div class="col-span-full text-center text-gray-500 py-8">${LibretvI18n?.t('noRecommendations', currentLocale, 'No recommendations')}</div>`;
         return;
     }
 
@@ -374,13 +397,27 @@ async function testCustomApiUrl(url) {
 
 // 设置事件监听器
 function setupEventListeners() {
-    document.getElementById('localeSelect')?.addEventListener('change', e => { currentLocale=e.target.value; localStorage.setItem('libretv:locale',currentLocale); LibretvI18n?.apply(document,currentLocale); updateMetadata(); updateRouteStatus(); resetSearchArea(); recommendationPage=1; loadRecommendations(); });
+    document.getElementById('localeSelect')?.addEventListener('change', e => { currentLocale=e.target.value; localStorage.setItem('libretv:locale',currentLocale); LibretvI18n?.apply(document,currentLocale); populateApiSourceOptions(); updateMetadata(); updateRouteStatus(); resetSearchArea(); recommendationPage=1; loadRecommendations(); });
     document.getElementById('regionSelect')?.addEventListener('change', e => { currentRegion=e.target.value; localStorage.setItem('libretv:region',currentRegion); updateRouteStatus(); resetSearchArea(); recommendationPage=1; loadRecommendations(); });
-    document.getElementById('sourceModeSelect')?.addEventListener('change', e => { sourceMode=e.target.value; localStorage.setItem('libretv:sourceMode',sourceMode); const a=document.getElementById('apiSource'); if(sourceMode==='region') { currentApiSource='region'; a.value='region'; } else if(sourceMode==='aggregated') { currentApiSource='aggregated'; a.value='aggregated'; } else if(sourceMode==='custom') { currentApiSource='custom'; a.value='custom'; document.getElementById('customApiInput')?.classList.remove('hidden'); } else if(!API_SITES[currentApiSource]) { sourceMode='manual'; currentApiSource=DEFAULT_API_SOURCE; a.value=currentApiSource; } updateRouteStatus(); resetSearchArea(); recommendationPage=1; loadRecommendations(); });
+    document.getElementById('sourceModeSelect')?.addEventListener('change', e => {
+        sourceMode = e.target.value;
+        const api = document.getElementById('apiSource');
+        if (sourceMode === 'region' || sourceMode === 'aggregated' || sourceMode === 'custom') currentApiSource = sourceMode;
+        else if (!API_SITES[currentApiSource]) {
+            const plan = LibretvRouting?.buildSourcePlan?.({locale: currentLocale, region: currentRegion, sourceMode:'region', capability:'search'});
+            currentApiSource = plan?.primary?.[0] || DEFAULT_API_SOURCE;
+        }
+        if (api) api.value = currentApiSource;
+        document.getElementById('customApiInput')?.classList.toggle('hidden', sourceMode !== 'custom');
+        if (sourceMode === 'custom') { const input = document.getElementById('customApiUrl'); if (input) input.value = customApiUrl; }
+        localStorage.setItem('libretv:sourceMode', sourceMode); localStorage.setItem('currentApiSource', currentApiSource);
+        document.getElementById('currentCode').textContent = currentApiSource;
+        updateRouteStatus(); resetSearchArea(); recommendationPage=1; loadRecommendations();
+    });
     // API源选择变更事件
     document.getElementById('apiSource').addEventListener('change', async function(e) {
         currentApiSource = e.target.value;
-        if (currentApiSource === 'region') { sourceMode='region'; localStorage.setItem('libretv:sourceMode',sourceMode); updateRouteStatus(); resetSearchArea(); recommendationPage=1; loadRecommendations(); return; }
+        if (currentApiSource === 'region') { sourceMode='region'; document.getElementById('customApiInput')?.classList.add('hidden'); localStorage.setItem('libretv:sourceMode',sourceMode); localStorage.setItem('currentApiSource', currentApiSource); updateRouteStatus(); resetSearchArea(); recommendationPage=1; loadRecommendations(); return; }
         sourceMode = currentApiSource === 'aggregated' ? 'aggregated' : currentApiSource === 'custom' ? 'custom' : 'manual';
         localStorage.setItem('libretv:sourceMode', sourceMode); const modeEl=document.getElementById('sourceModeSelect'); if(modeEl) modeEl.value=sourceMode;
         const customApiInput = document.getElementById('customApiInput');
@@ -404,6 +441,8 @@ function setupEventListeners() {
         
         // 清理搜索结果并重置搜索区域
         resetSearchArea();
+        recommendationPage = 1;
+        loadRecommendations();
     });
 
     // 自定义接口输入框事件 - 更新为支持多个API
@@ -418,6 +457,8 @@ function setupEventListeners() {
             // 测试所有配置的API
             if (customApiUrls.length > 0) {
                 updateSiteStatusWithTest('custom');
+                recommendationPage = 1;
+                loadRecommendations();
             } else {
                 document.getElementById('siteStatus').innerHTML = 
                     '<span class="text-gray-500">●</span> 未设置API';

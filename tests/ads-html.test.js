@@ -19,6 +19,36 @@ test('homepage exposes locale, region, source mode, and SEO language links', () 
   assert.match(indexHtml, /hreflang="en"/);
 });
 
+test('homepage marks static copy and aria labels for all locales', () => {
+  assert.match(indexHtml, /data-i18n="settings"/);
+  assert.match(indexHtml, /data-i18n="chooseSource"/);
+  assert.match(indexHtml, /data-i18n="recommendations"/);
+  assert.match(indexHtml, /data-i18n-placeholder="searchPlaceholder"/);
+  assert.match(indexHtml, /data-i18n-aria-label="searchButton"/);
+  assert.match(indexHtml, /data-i18n-aria-label="closeSettings"/);
+  assert.match(indexHtml, /data-i18n-aria-label="ad"/);
+});
+
+test('homepage source controls are populated from API_SITES at startup', () => {
+  assert.match(appJs, /populateApiSourceOptions\s*\(\)/);
+  assert.match(appJs, /Object\.entries\(API_SITES\)/);
+  assert.match(appJs, /localStorage\.setItem\(['"]currentApiSource['"]/);
+});
+
+test('routing context and recommendation cache include persisted controls and source plan', () => {
+  assert.match(appJs, /getItem\(['"]libretv:locale['"]\).*getItem\(['"]locale['"]/s);
+  assert.match(appJs, /getItem\(['"]libretv:region['"]\).*getItem\(['"]region['"]/s);
+  assert.match(appJs, /selectedSource\s*:\s*currentApiSource/);
+  assert.match(appJs, /customApiUrl/);
+  assert.match(appJs, /data\.routing\?\.fellBack/);
+});
+
+test('metadata updates all localized social fields', () => {
+  assert.match(appJs, /meta\[property="og:description"\]/);
+  assert.match(appJs, /meta\[property="twitter:title"\]/);
+  assert.match(appJs, /meta\[property="twitter:description"\]/);
+});
+
 test('homepage publishes the JuicyAds verification meta tag', () => {
   assert.match(indexHtml, /<meta name="juicyads-site-verification" content="ca6903256a7a8f7d9985abf9ceab0a93">/);
 });
