@@ -8,7 +8,16 @@ const robotsTxt = await readFile(new URL('../robots.txt', import.meta.url), 'utf
 const sitemapXml = await readFile(new URL('../sitemap.xml', import.meta.url), 'utf8');
 const stylesCss = await readFile(new URL('../css/styles.css', import.meta.url), 'utf8');
 const privacyHtml = await readFile(new URL('../privacy.html', import.meta.url), 'utf8');
+const aboutHtml = await readFile(new URL('../about.html', import.meta.url), 'utf8');
 const appJs = await readFile(new URL('../js/app.js', import.meta.url), 'utf8');
+
+test('all public pages expose language metadata and privacy mentions locale preferences', () => {
+  for (const html of [indexHtml, playerHtml, aboutHtml, privacyHtml]) {
+    assert.match(html, /hreflang="en"/);
+    assert.match(html, /data-i18n/);
+  }
+  assert.match(privacyHtml, /语言|地区|locale|region/i);
+});
 
 test('homepage exposes locale, region, source mode, and SEO language links', () => {
   assert.match(indexHtml, /id="localeSelect"/);

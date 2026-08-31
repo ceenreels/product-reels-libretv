@@ -1,9 +1,14 @@
 <!DOCTYPE html>
-<html lang="zh">
+<html lang="zh-CN">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>剧美天下播放器</title>
+    <meta name="description" content="剧美天下在线视频播放器。">
+    <meta property="og:type" content="website"><meta property="og:url" content="https://jumeitianxia.com/player.html"><meta property="og:title" content="剧美天下播放器"><meta property="og:description" content="剧美天下在线视频播放器。">
+    <link rel="canonical" href="https://jumeitianxia.com/player.html">
+    <link rel="alternate" hreflang="zh-CN" href="https://jumeitianxia.com/player.html?lang=zh-CN"><link rel="alternate" hreflang="zh-TW" href="https://jumeitianxia.com/player.html?lang=zh-TW"><link rel="alternate" hreflang="en" href="https://jumeitianxia.com/player.html?lang=en"><link rel="alternate" hreflang="x-default" href="https://jumeitianxia.com/player.html">
+    <script>(()=>{const m={"zh-CN":{t:'剧美天下播放器',d:'剧美天下在线视频播放器。'},"zh-TW":{t:'剧美天下播放器',d:'剧美天下影片播放器。'},en:{t:'剧美天下 player',d:'Watch videos with the 剧美天下 player.'}};const l=new URLSearchParams(location.search).get('lang');const x=m[l]||m['zh-CN'];document.title=x.t;document.querySelector('meta[name="description"]').content=x.d;document.querySelector('meta[property="og:title"]').content=x.t;document.querySelector('meta[property="og:description"]').content=x.d;})();</script>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="css/styles.css">
     <style>
@@ -154,9 +159,9 @@
             </a>
         </div>
         <h2 id="videoTitle" class="text-xl font-semibold truncate flex-1 text-center"></h2>
-        <a href="index.html" class="px-4 py-2 bg-[#222] hover:bg-[#333] border border-[#333] rounded-lg transition-colors">
+        <div class="flex items-center gap-2"><select id="pageLocale" class="bg-[#222] border border-[#333] rounded px-2 py-1"><option value="zh-CN">简体中文</option><option value="zh-TW">繁體中文</option><option value="en">English</option></select><a href="index.html" class="px-4 py-2 bg-[#222] hover:bg-[#333] border border-[#333] rounded-lg transition-colors" data-i18n="backHome">
             返回首页
-        </a>
+        </a></div>
     </header>
 
     <main class="container mx-auto px-4 py-4">
@@ -166,12 +171,12 @@
                 <div id="player"></div>
                 <div class="loading-container" id="loading">
                     <div class="loading-spinner"></div>
-                    <div>正在加载视频...</div>
+                    <div data-i18n="playerLoading">正在加载视频...</div>
                 </div>
                 <div class="error-container" id="error">
                     <div class="error-icon">⚠️</div>
-                    <div id="error-message">视频加载失败</div>
-                    <div style="margin-top: 10px; font-size: 14px; color: #aaa;">请尝试其他视频源或稍后重试</div>
+                    <div id="error-message" data-i18n="sourceError">当前视频源加载失败</div>
+                    <div data-i18n="tryAgain" style="margin-top: 10px; font-size: 14px; color: #aaa;">请尝试其他视频源或稍后重试</div>
                 </div>
             </div>
         </div>
@@ -192,11 +197,11 @@
                     <svg class="w-5 h-5 inline-block" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"></path>
                     </svg>
-                    上一集
+                    <span data-i18n="previousEpisode">上一集</span>
                 </button>
                 <span class="text-gray-400" id="episodeInfo">加载中...</span>
                 <button onclick="playNextEpisode()" id="nextButton" class="px-4 py-2 bg-[#222] hover:bg-[#333] border border-[#333] rounded-lg transition-colors">
-                    下一集
+                    <span data-i18n="nextEpisode">下一集</span>
                     <svg class="w-5 h-5 inline-block" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path>
                     </svg>
@@ -207,7 +212,7 @@
         <!-- 添加自动播放开关和排序按钮 -->
         <div class="player-container">
             <div class="flex justify-end items-center mb-4 gap-2">
-                <span class="text-gray-400 text-sm">自动连播</span>
+                <span class="text-gray-400 text-sm" data-i18n="autoplay">自动连播</span>
                 <label class="switch">
                     <input type="checkbox" id="autoplayToggle">
                     <span class="slider"></span>
@@ -216,7 +221,7 @@
                     <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" id="orderIcon" viewBox="0 0 20 20" fill="currentColor">
                         <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm1-11a1 1 0 10-2 0v3.586L7.707 9.293a1 1 0 00-1.414 1.414l3 3a1 1 0 001.414 0l3-3a1 1 0 00-1.414-1.414L11 10.586V7z" clip-rule="evenodd" />
                     </svg>
-                    <span id="orderText">倒序排列</span>
+                    <span id="orderText" data-i18n="reverseOrder">倒序排列</span>
                 </button>
             </div>
         </div>
@@ -226,7 +231,7 @@
             <div class="episode-grid" id="episodesGrid">
                 <div class="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-6 lg:grid-cols-8 gap-2" id="episodesList">
                     <!-- 集数将在这里动态加载 -->
-                    <div class="col-span-full text-center text-gray-400 py-8">加载中...</div>
+                    <div class="col-span-full text-center text-gray-400 py-8" data-i18n="loading">加载中...</div>
                 </div>
             </div>
         </div>
@@ -246,6 +251,11 @@
     <script src="https://s4.zstatic.net/ajax/libs/hls.js/1.5.6/hls.min.js" integrity="sha256-X1GmLMzVcTBRiGjEau+gxGpjRK96atNczcLBg5w6hKA=" crossorigin="anonymous"></script>
     <script src="https://s4.zstatic.net/ajax/libs/dplayer/1.26.0/DPlayer.min.js" integrity="sha256-OJg03lDZP0NAcl3waC9OT5jEa8XZ8SM2n081Ik953o4=" crossorigin="anonymous"></script>
     <script src="js/config.js"></script>
+    <script src="js/i18n/messages.js"></script>
+    <script src="js/i18n/index.js"></script>
+    <script>
+      document.addEventListener('DOMContentLoaded',()=>{const i=globalThis.LibretvI18n,q=new URLSearchParams(location.search),locale=i.resolveLocale({storedLocale:q.get('lang')||localStorage.getItem('libretv:locale'),browserLanguages:navigator.languages});window.playerLocale=locale;i.apply(document,locale);const s=document.getElementById('pageLocale');if(s){s.value=locale;s.addEventListener('change',()=>{localStorage.setItem('libretv:locale',s.value);const u=new URL(location.href);u.searchParams.set('lang',s.value);location.assign(u.href)})}});
+    </script>
     <script>
         // 全局变量
         let currentVideoTitle = '';
@@ -260,12 +270,18 @@
         let userClickedPosition = null; // 记录用户点击的位置
         let shortcutHintTimeout = null; // 用于控制快捷键提示显示时间
         let adFilteringEnabled = true; // 默认开启广告过滤
+        let currentLocale = 'zh-CN';
 
         // 页面加载
         document.addEventListener('DOMContentLoaded', function() {
+            currentLocale = window.playerLocale || 'zh-CN';
             // 解析URL参数
             const urlParams = new URLSearchParams(window.location.search);
             const videoUrl = urlParams.get('url');
+            const sourceCode = urlParams.get('source_code') || urlParams.get('source') || localStorage.getItem('currentApiSource') || '';
+            window.playerSourceCode = sourceCode;
+            window.playerRegion = urlParams.get('region') || localStorage.getItem('libretv:region') || localStorage.getItem('region') || '';
+            window.playerSourceMode = urlParams.get('sourceMode') || localStorage.getItem('libretv:sourceMode') || localStorage.getItem('sourceMode') || '';
             const title = urlParams.get('title');
             const index = parseInt(urlParams.get('index') || '0');
 
@@ -747,7 +763,8 @@
         // 更新集数信息
         function updateEpisodeInfo() {
             if (currentEpisodes.length > 0) {
-                document.getElementById('episodeInfo').textContent = `第 ${currentEpisodeIndex + 1}/${currentEpisodes.length} 集`;
+                const label = globalThis.LibretvI18n ? globalThis.LibretvI18n.t('episodeList', currentLocale) : '集';
+                document.getElementById('episodeInfo').textContent = `${currentEpisodeIndex + 1}/${currentEpisodes.length} ${label}`;
             } else {
                 document.getElementById('episodeInfo').textContent = '无集数信息';
             }
@@ -909,7 +926,7 @@
             const orderIcon = document.getElementById('orderIcon');
             
             if (orderText && orderIcon) {
-                orderText.textContent = episodesReversed ? '正序排列' : '倒序排列';
+                orderText.textContent = globalThis.LibretvI18n ? globalThis.LibretvI18n.t(episodesReversed ? 'forwardOrder' : 'reverseOrder', currentLocale, episodesReversed ? '正序排列' : '倒序排列') : (episodesReversed ? '正序排列' : '倒序排列');
                 orderIcon.style.transform = episodesReversed ? 'rotate(180deg)' : '';
             }
         }

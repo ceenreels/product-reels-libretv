@@ -6,6 +6,9 @@
       <changefreq>daily</changefreq>
       <priority>1.0</priority>
    </url>
+   <url><loc>https://jumeitianxia.com/?lang=zh-CN</loc><lastmod>2026-08-31</lastmod><changefreq>daily</changefreq><priority>1.0</priority></url>
+   <url><loc>https://jumeitianxia.com/?lang=zh-TW</loc><lastmod>2026-08-31</lastmod><changefreq>daily</changefreq><priority>1.0</priority></url>
+   <url><loc>https://jumeitianxia.com/?lang=en</loc><lastmod>2026-08-31</lastmod><changefreq>daily</changefreq><priority>1.0</priority></url>
    <url>
       <loc>https://jumeitianxia.com/about.html</loc>
       <lastmod>2026-08-31</lastmod>
