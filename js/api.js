@@ -124,6 +124,33 @@ async function enrichRecommendationCovers(items, sourceCode) {
     return items;
 }
 
+async function handleCustomRecommendations(customApi, page, context) {
+    const urls = String(customApi || '').split(CUSTOM_API_CONFIG.separator)
+        .map(value => value.trim()).filter(value => /^https?:\/\//i.test(value))
+        .slice(0, CUSTOM_API_CONFIG.maxSources);
+    if (!urls.length) throw new Error('使用自定义API时必须提供API地址');
+    const all = [], usedSources = [];
+    for (let i = 0; i < urls.length; i++) {
+        const apiUrl = `${urls[i]}${API_CONFIG.recommendations.path}${page}`;
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), API_REQUEST_TIMEOUT);
+        try {
+            const response = await fetch(buildProxyUrl(apiUrl), { headers: API_CONFIG.search.headers, signal: controller.signal });
+            if (!response.ok) throw new Error(`自定义推荐请求失败: ${response.status}`);
+            const data = await readApiResponse(response);
+            if (!data || !Array.isArray(data.list)) throw new Error('自定义推荐接口返回的数据格式无效');
+            usedSources.push('custom');
+            data.list.forEach(item => all.push({ ...item, source_name: `${CUSTOM_API_CONFIG.namePrefix}${i + 1}`, source_code: 'custom', api_url: urls[i] }));
+        } catch (error) {
+            console.warn(`自定义API ${i + 1} 推荐失败:`, error);
+        } finally {
+            clearTimeout(timeoutId);
+        }
+    }
+    await enrichRecommendationCovers(all.slice(0, 12), 'custom');
+    return JSON.stringify({ code: 200, list: all, routing: { locale: context.locale, region: context.region, requestedSources: ['custom'], usedSources: usedSources.length ? ['custom'] : [], fellBack: false } });
+}
+
 // 改进的API请求处理函数
 async function handleApiRequest(url) {
     const customApi = url.searchParams.get('customApi') || '';
@@ -217,7 +244,10 @@ async function handleApiRequest(url) {
         if (url.pathname === '/api/recommendations') {
             const context = getRoutingContext(url);
             const requestedSource = url.searchParams.get('source') || DEFAULT_API_SOURCE;
-            const plan = getSourcePlan(context);
+            if (context.sourceMode === 'custom') {
+                return await handleCustomRecommendations(customApi, Math.max(1, Number.parseInt(url.searchParams.get('page') || '1', 10) || 1), context);
+            }
+            const plan = getSourcePlan({ ...context, capability: 'recommendations' });
             const routed = context.sourceMode === 'aggregated' || context.sourceMode === 'region';
             const sourceCandidates = routed ? plan.primary.concat(plan.fallback) : [API_SITES[requestedSource] ? requestedSource : DEFAULT_API_SOURCE];
             const page = Math.max(1, Number.parseInt(url.searchParams.get('page') || '1', 10) || 1);
@@ -368,11 +398,18 @@ async function handleApiRequest(url) {
         throw new Error('未知的API路径');
     } catch (error) {
         console.error('API处理错误:', error);
+        let routing;
+        try {
+            const context = getRoutingContext(url);
+            const plan = context.sourceMode === 'custom' ? { primary: ['custom'], fallback: [] } : getSourcePlan({ ...context, capability: url.pathname === '/api/recommendations' ? 'recommendations' : 'search' });
+            routing = { locale: context.locale, region: context.region, requestedSources: plan.primary.concat(plan.fallback), usedSources: [], fellBack: false };
+        } catch (_) {}
         return JSON.stringify({
             code: 400,
             msg: error.message || '请求处理失败',
             list: [],
             episodes: [],
+            ...(routing ? { routing } : {})
         });
     }
 }
@@ -516,7 +553,7 @@ async function handleJisuDetail(id, sourceCode) {
 // 新增: 处理聚合搜索
 async function handleAggregatedSearch(searchQuery, context) {
     context = context || { locale: 'zh-CN', region: 'GLOBAL_ZH', sourceMode: 'aggregated', selectedSource: '' };
-    const plan = getSourcePlan(context);
+    const plan = getSourcePlan({ ...context, capability: 'search' });
     const requestedSources = plan.primary.concat(plan.fallback);
     if (!requestedSources.length) return JSON.stringify({ code: 200, list: [], msg: '没有可用的API源', routing: { locale: context.locale, region: context.region, requestedSources, usedSources: [], fellBack: false } });
 

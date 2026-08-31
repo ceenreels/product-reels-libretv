@@ -82,11 +82,13 @@ test('fallback excludes region-limited sources from incompatible regions', async
   const sandbox = await loadScripts(['js/source-routing.js']);
   sandbox.API_SITES = {
     cnOnly: { languages: ['zh-CN'], regions: ['CN'], defaultEligible: true, enabled: true, capabilities: { search: true }, priority: 10 },
-    globalZh: { languages: ['zh-CN'], regions: ['GLOBAL_ZH'], defaultEligible: true, enabled: true, capabilities: { search: true }, priority: 5 }
+    globalZh: { languages: ['zh-CN'], regions: ['GLOBAL_ZH'], defaultEligible: true, enabled: true, capabilities: { search: true }, priority: 5 },
+    globalEn: { languages: ['en'], regions: ['GLOBAL_EN'], defaultEligible: true, enabled: true, capabilities: { search: true }, priority: 4 }
   };
   const fallback = sandbox.LibretvRouting.getFallbackSources({ locale: 'zh-TW', region: 'TW' });
   assert.ok(!fallback.includes('cnOnly'));
   assert.ok(fallback.includes('globalZh'));
+  assert.ok(!fallback.includes('globalEn'));
 });
 
 test('missing eligibility metadata is excluded from automatic routing but remains manually selectable', async () => {
@@ -150,4 +152,51 @@ test('one primary source failure does not block another source', async () => {
   assert.equal(payload.code, 200);
   assert.ok(payload.list.length > 0);
   assert.equal(payload.routing.fellBack, false);
+});
+
+test('recommendation plans exclude sources without recommendation capability', async () => {
+  const sandbox = await loadScripts(['js/source-routing.js']);
+  sandbox.API_SITES = {
+    searchOnly: { languages: ['zh-CN'], regions: ['CN'], defaultEligible: true, enabled: true, capabilities: { search: true, recommendations: false }, priority: 100 },
+    recommender: { languages: ['zh-CN'], regions: ['CN'], defaultEligible: true, enabled: true, capabilities: { search: true, recommendations: true }, priority: 90 }
+  };
+  const plan = sandbox.LibretvRouting.buildSourcePlan({ locale: 'zh-CN', region: 'CN', sourceMode: 'aggregated', capability: 'recommendations' });
+  assert.ok(![...plan.primary, ...plan.fallback].includes('searchOnly'));
+  assert.ok([...plan.primary, ...plan.fallback].includes('recommender'));
+  const searchPlan = sandbox.LibretvRouting.buildSourcePlan({ locale: 'zh-CN', region: 'CN', sourceMode: 'aggregated', capability: 'search' });
+  assert.ok([...searchPlan.primary, ...searchPlan.fallback].includes('searchOnly'));
+});
+
+test('custom recommendations use the supplied custom API and expose routing metadata', async () => {
+  let requested = '';
+  const sandbox = await loadApiSandbox(async input => {
+    requested = decodeURIComponent(String(input));
+    return { ok: true, text: async () => JSON.stringify({ list: [{ vod_id: '9', vod_name: 'Custom', vod_pic: 'https://img.test/custom.jpg' }] }) };
+  });
+  const payload = JSON.parse(await sandbox.handleApiRequest(new URL('https://jumeitianxia.com/api/recommendations?page=1&source=custom&sourceMode=custom&customApi=https%3A%2F%2Fcustom.example')));
+  assert.equal(payload.code, 200);
+  assert.equal(payload.list[0].source_code, 'custom');
+  assert.equal(payload.routing.usedSources[0], 'custom');
+  assert.ok(requested.includes('custom.example'));
+});
+
+test('custom search responses include explicit routing metadata', async () => {
+  const sandbox = await loadApiSandbox(async () => ({ ok: true, text: async () => JSON.stringify({ list: [{ vod_id: '10', vod_name: 'Custom Search' }] }) }));
+  const payload = JSON.parse(await sandbox.handleApiRequest(new URL('https://jumeitianxia.com/api/search?wd=x&source=custom&sourceMode=custom&customApi=https%3A%2F%2Fcustom.example')));
+  assert.equal(payload.code, 200);
+  assert.deepEqual({ ...payload.routing }, { locale: 'zh-CN', region: 'GLOBAL_ZH', requestedSources: ['custom'], usedSources: ['custom'], fellBack: false });
+});
+
+test('recommendation failures still expose routing metadata', async () => {
+  const sandbox = await loadApiSandbox(async () => ({ ok: false, status: 503, text: async () => '{}' }));
+  const payload = JSON.parse(await sandbox.handleApiRequest(new URL('https://jumeitianxia.com/api/recommendations?page=1&locale=zh-CN&region=CN&sourceMode=region')));
+  assert.equal(payload.code, 400);
+  assert.equal(payload.routing.locale, 'zh-CN');
+  assert.ok(Array.isArray(payload.routing.requestedSources));
+});
+
+test('static page loads source routing before API interception', async () => {
+  const { readFile } = await import('node:fs/promises');
+  const html = await readFile(new URL('../index.html', import.meta.url), 'utf8');
+  assert.ok(html.indexOf('src="js/source-routing.js"') < html.indexOf('src="js/api.js"'));
 });

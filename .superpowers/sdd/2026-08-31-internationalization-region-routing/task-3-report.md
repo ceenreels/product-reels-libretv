@@ -23,3 +23,15 @@ Verification:
 
 - Existing regional metadata has no distinct fallback source for some Chinese regions (for example CN), so fallback metadata correctly reports no fallback when every eligible source fails.
 - Recommendation cover enrichment remains best-effort and does not affect source health, matching the existing behavior.
+
+## Review fix round 1
+
+- Custom recommendation requests now use the supplied custom API list and retain manual-only source identity; custom search and recommendation responses (including empty results) include routing metadata.
+- App-generated custom search/recommendation URLs now always carry locale, region, and sourceMode.
+- Routing plans accept a capability selector; recommendation routing excludes search-only sources and records recommendation health outcomes.
+- Fallback global tiers require language compatibility, with an explicit final global fallback retained for English when no English-labelled source exists.
+- `index.html` now loads `js/source-routing.js` before `js/api.js`, restoring browser runtime routing.
+- Added regression tests for custom recommendations/search metadata, capability filtering, fallback language safety, and static script order.
+- Added failure-path coverage ensuring recommendation errors still return routing metadata.
+
+Latest verification: `node --test tests/i18n-routing.test.js` — 20 passed.

@@ -110,6 +110,7 @@ async function loadRecommendations() {
         const query = new URLSearchParams(routeParams);
         query.set('sourceMode', routeMode);
         if (routeMode === 'custom') query.set('source', source);
+        if (routeMode === 'custom' && customApiUrl) query.set('customApi', customApiUrl);
         query.set('page', recommendationPage);
         const response = await fetch(`/api/recommendations?${query.toString()}`);
         const data = await response.json();
@@ -472,9 +473,9 @@ async function search() {
             
             // 检查是否有多个API (存在逗号)
             if (customApiUrl.includes(CUSTOM_API_CONFIG.separator)) {
-                apiParams = '&customApi=' + encodeURIComponent(customApiUrl) + '&source=custom&multipleApis=true';
+                apiParams = '&customApi=' + encodeURIComponent(customApiUrl) + '&' + getPageRoutingParams('custom') + '&multipleApis=true';
             } else {
-                apiParams = '&customApi=' + encodeURIComponent(customApiUrl) + '&source=custom';
+                apiParams = '&customApi=' + encodeURIComponent(customApiUrl) + '&' + getPageRoutingParams('custom');
             }
         } else {
             apiParams = '&' + getPageRoutingParams(currentApiSource);
