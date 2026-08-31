@@ -124,6 +124,30 @@ function updateMetadata() {
 let recommendationPage = 1;
 const RECOMMENDATION_PAGE_SIZE = 12;
 
+function buildRecommendationCacheKey({ locale, region, sourceMode, selectedSource, customApiUrl: customUrl, plan, page }) {
+    const primary = Array.isArray(plan?.primary) ? plan.primary : [];
+    const fallback = Array.isArray(plan?.fallback) ? plan.fallback : [];
+    const orderedPlan = [...primary, '|', ...fallback].join(',');
+    const sourcePlan = [sourceMode, selectedSource, orderedPlan, customUrl || '']
+        .map(value => encodeURIComponent(String(value || '')))
+        .join('|');
+    return `libretv:recommendations:${encodeURIComponent(locale || '')}:${encodeURIComponent(region || '')}:${sourcePlan}:page:${Number(page) || 1}`;
+}
+
+function getLegacyRecommendationSources({ source, sourceMode: mode, plan }) {
+    const candidates = [];
+    const add = value => {
+        if (value && !candidates.includes(value)) candidates.push(value);
+    };
+    if (mode === 'manual' && source && source !== 'region' && source !== 'aggregated' && source !== 'custom') add(source);
+    if (typeof API_SITES !== 'undefined' && API_SITES[source]) add(source);
+    (plan?.primary || []).forEach(add);
+    (plan?.fallback || []).forEach(add);
+    if (mode === 'custom') add('custom');
+    add(DEFAULT_API_SOURCE);
+    return candidates;
+}
+
 function getPageRoutingParams(sourceOverride) {
     const source = sourceOverride || currentApiSource;
     const mode = sourceMode || (source === 'custom' ? 'custom' : source === 'aggregated' ? 'aggregated' : 'manual');
@@ -151,8 +175,15 @@ async function loadRecommendations() {
         ? DEFAULT_API_SOURCE
         : currentApiSource;
     const plan = (typeof LibretvRouting !== 'undefined' && LibretvRouting.buildSourcePlan) ? LibretvRouting.buildSourcePlan({locale: currentLocale, region: currentRegion, sourceMode, selectedSource: currentApiSource, capability:'recommendations'}) : {primary:[], fallback:[]};
-    const planKey = [...(plan.primary || []), '|', ...(plan.fallback || [])].join(',');
-    const cacheKey = `locale=${currentLocale}&region=${currentRegion}&mode=${sourceMode}&source=${currentApiSource}&custom=${encodeURIComponent(customApiUrl)}&plan=${planKey}&page=${recommendationPage}`;
+    const cacheKey = buildRecommendationCacheKey({
+        locale: currentLocale,
+        region: currentRegion,
+        sourceMode,
+        selectedSource: currentApiSource,
+        customApiUrl,
+        plan,
+        page: recommendationPage
+    });
 
     area.classList.remove('hidden');
     container.innerHTML = `<div class="col-span-full text-center text-gray-500 py-8">${LibretvI18n?.t('recommendationLoading', currentLocale, 'Loading recommendations...')}</div>`;
@@ -180,9 +211,20 @@ async function loadRecommendations() {
         renderRecommendations(items);
     } catch (error) {
         console.error('加载推荐内容失败:', error);
-        const cachedItems = recommendationCache?.read(cacheKey, RECOMMENDATION_CACHE_TTL);
+        let cachedItems = recommendationCache?.read(cacheKey, RECOMMENDATION_CACHE_TTL);
+        let legacyCacheSource = '';
+        if (!cachedItems?.length) {
+            for (const candidate of getLegacyRecommendationSources({ source, sourceMode, plan })) {
+                const legacyItems = recommendationCache?.read(candidate, RECOMMENDATION_CACHE_TTL);
+                if (legacyItems?.length) {
+                    cachedItems = legacyItems;
+                    legacyCacheSource = candidate;
+                    break;
+                }
+            }
+        }
         if (cachedItems?.length) {
-            renderRecommendations(cachedItems); updateRouteStatus(recommendationFallback);
+            renderRecommendations(cachedItems, { legacySource: legacyCacheSource }); updateRouteStatus(recommendationFallback);
             return;
         }
         container.innerHTML = `<div class="col-span-full text-center text-gray-500 py-8">${LibretvI18n?.t('recommendationError', currentLocale, 'Recommendations unavailable')}</div>`;
@@ -190,9 +232,10 @@ async function loadRecommendations() {
     }
 }
 
-function renderRecommendations(items) {
+function renderRecommendations(items, options = {}) {
     const container = document.getElementById('recommendationResults');
     if (!container) return;
+    const legacySource = options.legacySource || currentApiSource;
 
     container.innerHTML = '';
     if (!items.length) {
@@ -208,7 +251,7 @@ function renderRecommendations(items) {
         button.type = 'button';
         button.className = 'block w-full text-left';
         button.addEventListener('click', () => {
-            showDetails(String(item.vod_id || ''), item.vod_name || '未知视频', item.source_code || currentApiSource);
+            showDetails(String(item.vod_id || ''), item.vod_name || '未知视频', item.source_code || legacySource);
         });
 
         const cover = document.createElement('div');

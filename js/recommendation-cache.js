@@ -3,7 +3,9 @@
 
     function createRecommendationCache(storage = root?.localStorage, now = () => Date.now()) {
         function keyFor(source) {
-            return `${keyPrefix}${String(source || '').trim()}`;
+            const value = String(source || '').trim();
+            if (!value) return '';
+            return value.startsWith(keyPrefix) ? value : `${keyPrefix}${value}`;
         }
 
         return {

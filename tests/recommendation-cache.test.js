@@ -40,3 +40,15 @@ test('recommendation cache ignores expired and malformed entries', () => {
   storage.setItem('libretv:recommendations:ffzy', '{broken');
   assert.equal(cache.read('ffzy', 600), null);
 });
+
+test('recommendation cache accepts canonical route keys without duplicating its namespace', () => {
+  const storage = createMemoryStorage();
+  const cache = createRecommendationCache(storage, () => 1000);
+  const routeKey = 'libretv:recommendations:zh-CN:CN:ffzy:page:1';
+
+  cache.save(routeKey, [{ vod_id: 7, source_code: 'ffzy' }]);
+
+  assert.equal(JSON.stringify(cache.read(routeKey, 600)), JSON.stringify([{ vod_id: 7, source_code: 'ffzy' }]));
+  assert.ok(storage.getItem(routeKey));
+  assert.equal(storage.getItem(`libretv:recommendations:${routeKey}`), null);
+});

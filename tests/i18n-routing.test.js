@@ -1,5 +1,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { readFile } from 'node:fs/promises';
+
+const appSource = await readFile(new URL('../js/app.js', import.meta.url), 'utf8');
 
 const loadScripts = async paths => {
   const { readFile } = await import('node:fs/promises');
@@ -231,4 +234,12 @@ test('static page loads source routing before API interception', async () => {
   const { readFile } = await import('node:fs/promises');
   const html = await readFile(new URL('../index.html', import.meta.url), 'utf8');
   assert.ok(html.indexOf('src="js/source-routing.js"') < html.indexOf('src="js/api.js"'));
+});
+
+test('recommendation cache keys and cards preserve route and source identity', () => {
+  assert.match(appSource, /function\s+buildRecommendationCacheKey\s*\(/);
+  assert.match(appSource, /libretv:recommendations:/);
+  assert.match(appSource, /selectedSource:\s*currentApiSource/);
+  assert.match(appSource, /customApiUrl/);
+  assert.match(appSource, /item\.source_code\s*\|\|\s*legacySource/);
 });
