@@ -193,6 +193,8 @@ test('recommendation failures still expose routing metadata', async () => {
   assert.equal(payload.code, 400);
   assert.equal(payload.routing.locale, 'zh-CN');
   assert.ok(Array.isArray(payload.routing.requestedSources));
+  assert.ok(payload.routing.requestedSources.includes('ffzy'));
+  assert.deepEqual([...payload.routing.usedSources], []);
 });
 
 test('static page loads source routing before API interception', async () => {

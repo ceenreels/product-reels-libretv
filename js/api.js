@@ -156,6 +156,9 @@ async function handleApiRequest(url) {
     const customApi = url.searchParams.get('customApi') || '';
     const source = url.searchParams.get('source') || DEFAULT_API_SOURCE;
     const multipleApis = url.searchParams.get('multipleApis') === 'true';
+    let attemptedRoutingSources = null;
+    let routingUsedSources = [];
+    let routingFellBack = false;
     
     try {
         if (url.pathname === '/api/search') {
@@ -250,12 +253,14 @@ async function handleApiRequest(url) {
             const plan = getSourcePlan({ ...context, capability: 'recommendations' });
             const routed = context.sourceMode === 'aggregated' || context.sourceMode === 'region';
             const sourceCandidates = routed ? plan.primary.concat(plan.fallback) : [API_SITES[requestedSource] ? requestedSource : DEFAULT_API_SOURCE];
+            attemptedRoutingSources = sourceCandidates.slice();
             const page = Math.max(1, Number.parseInt(url.searchParams.get('page') || '1', 10) || 1);
             let sourceCode = '', data = null, emptyData = null, emptySource = '', fellBack = false, usedSources = [];
             for (let i = 0; i < sourceCandidates.length; i++) {
                 const candidate = sourceCandidates[i];
                 if (!API_SITES[candidate]) continue;
                 try {
+                    if (routed && i >= plan.primary.length) routingFellBack = true;
                     const detailUrl = `${API_SITES[candidate].api}${API_CONFIG.recommendations.path}${page}`;
                     const controller = new AbortController();
                     const timeoutId = setTimeout(() => controller.abort(), API_REQUEST_TIMEOUT);
@@ -271,6 +276,7 @@ async function handleApiRequest(url) {
                     markSourceSuccess(candidate);
                     if (!payload.list.length) { emptyData = payload; emptySource = candidate; continue; }
                     usedSources.push(candidate);
+                    routingUsedSources = usedSources.slice();
                     sourceCode = candidate; data = payload; fellBack = routed && i >= plan.primary.length;
                     break;
                 } catch (error) {
@@ -402,7 +408,8 @@ async function handleApiRequest(url) {
         try {
             const context = getRoutingContext(url);
             const plan = context.sourceMode === 'custom' ? { primary: ['custom'], fallback: [] } : getSourcePlan({ ...context, capability: url.pathname === '/api/recommendations' ? 'recommendations' : 'search' });
-            routing = { locale: context.locale, region: context.region, requestedSources: plan.primary.concat(plan.fallback), usedSources: [], fellBack: false };
+            const requestedSources = attemptedRoutingSources || plan.primary.concat(plan.fallback);
+            routing = { locale: context.locale, region: context.region, requestedSources, usedSources: routingUsedSources, fellBack: routingFellBack };
         } catch (_) {}
         return JSON.stringify({
             code: 400,

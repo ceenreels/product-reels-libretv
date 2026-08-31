@@ -35,3 +35,8 @@ Verification:
 - Added failure-path coverage ensuring recommendation errors still return routing metadata.
 
 Latest verification: `node --test tests/i18n-routing.test.js` — 20 passed.
+
+## Review fix round 2
+
+- Recommendation routing now snapshots attempted source IDs before health mutations, preserving accurate `requestedSources` on total failure; `usedSources` and `fellBack` reflect actual outcomes.
+- Added regression coverage asserting failed primary sources remain present in failure metadata.
