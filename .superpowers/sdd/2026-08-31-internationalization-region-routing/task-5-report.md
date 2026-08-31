@@ -23,3 +23,10 @@
 - `node --test tests/ads-html.test.js tests/i18n-routing.test.js`：38 passed。
 - `npm test`：51 passed。
 
+## Fix round（审查后）
+
+- `js/app.js` 现在让结果的 `source_code` 贯穿详情、集数按钮、上一集/下一集及播放器 URL，并携带 locale/region/sourceMode；不会因之后切换 currentApiSource 而改源。
+- `index.html` 调整为 messages/index 早于 ui、source-routing、api、recommendation-cache、app（config 保持最前）。
+- `player.html` 的链接解析、HLS fatal、DPlayer error、超时加载及播放切换错误统一使用 `LibretvI18n.t()`；标题后缀使用当前 locale 的 `playerTitle`。
+- Fix round RED：新增 source_code、脚本顺序及播放器错误文案测试后，旧实现 3 项失败。
+- Fix round GREEN：`node --test tests/ads-html.test.js` 18 passed；随后 `node --test tests/ads-html.test.js tests/i18n-routing.test.js` 与 `npm test` 均通过（详见提交时输出）。

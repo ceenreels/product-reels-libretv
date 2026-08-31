@@ -14,6 +14,7 @@ let currentEpisodeIndex = 0;
 let currentEpisodes = [];
 // 添加当前视频的标题
 let currentVideoTitle = '';
+let currentVideoSource = currentApiSource;
 // 新增全局变量用于倒序状态
 let episodesReversed = false;
 
@@ -756,6 +757,7 @@ async function showDetails(id, vod_name, sourceCode = currentApiSource) {
         
         // 保存当前源码以便后续操作
         currentApiSource = sourceCode;
+        currentVideoSource = sourceCode;
         
         if (data.episodes && data.episodes.length > 0) {
             // 安全处理集数URL
@@ -783,7 +785,7 @@ async function showDetails(id, vod_name, sourceCode = currentApiSource) {
                     </button>
                 </div>
                 <div id="episodesGrid" class="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-6 lg:grid-cols-8 gap-2">
-                    ${renderEpisodes(vod_name)}
+                    ${renderEpisodes(vod_name, sourceCode)}
                 </div>
             `;
         } else {
@@ -804,7 +806,7 @@ async function showDetails(id, vod_name, sourceCode = currentApiSource) {
 }
 
 // 更新播放视频函数，修改为在新标签页中打开播放页面
-function playVideo(url, vod_name, episodeIndex = 0) {
+function playVideo(url, vod_name, episodeIndex = 0, sourceCode = currentVideoSource || currentApiSource) {
     if (!url) {
         showToast('无效的视频链接', 'error');
         return;
@@ -815,9 +817,10 @@ function playVideo(url, vod_name, episodeIndex = 0) {
     localStorage.setItem('currentEpisodeIndex', episodeIndex);
     localStorage.setItem('currentEpisodes', JSON.stringify(currentEpisodes));
     localStorage.setItem('episodesReversed', episodesReversed);
+    currentVideoSource = sourceCode || currentApiSource;
     
     // 构建播放页面URL，传递必要参数
-    const playerUrl = `player.html?url=${encodeURIComponent(url)}&title=${encodeURIComponent(vod_name)}&index=${episodeIndex}`;
+    const playerUrl = `player.html?url=${encodeURIComponent(url)}&title=${encodeURIComponent(vod_name)}&index=${episodeIndex}&source_code=${encodeURIComponent(currentVideoSource)}&locale=${encodeURIComponent(currentLocale)}&region=${encodeURIComponent(currentRegion)}&sourceMode=${encodeURIComponent(sourceMode)}`;
     
     // 在新标签页中打开播放页面
     window.open(playerUrl, '_blank');
@@ -828,7 +831,7 @@ function playPreviousEpisode() {
     if (currentEpisodeIndex > 0) {
         const prevIndex = currentEpisodeIndex - 1;
         const prevUrl = currentEpisodes[prevIndex];
-        playVideo(prevUrl, currentVideoTitle, prevIndex);
+        playVideo(prevUrl, currentVideoTitle, prevIndex, currentVideoSource);
     }
 }
 
@@ -837,7 +840,7 @@ function playNextEpisode() {
     if (currentEpisodeIndex < currentEpisodes.length - 1) {
         const nextIndex = currentEpisodeIndex + 1;
         const nextUrl = currentEpisodes[nextIndex];
-        playVideo(nextUrl, currentVideoTitle, nextIndex);
+        playVideo(nextUrl, currentVideoTitle, nextIndex, currentVideoSource);
     }
 }
 
@@ -848,13 +851,13 @@ function handlePlayerError() {
 }
 
 // 新增辅助函数用于渲染剧集按钮（使用当前的排序状态）
-function renderEpisodes(vodName) {
+function renderEpisodes(vodName, sourceCode = currentVideoSource || currentApiSource) {
     const episodes = episodesReversed ? [...currentEpisodes].reverse() : currentEpisodes;
     return episodes.map((episode, index) => {
         // 根据倒序状态计算真实的剧集索引
         const realIndex = episodesReversed ? currentEpisodes.length - 1 - index : index;
         return `
-            <button id="episode-${realIndex}" onclick="playVideo('${episode}','${vodName.replace(/"/g, '&quot;')}', ${realIndex})" 
+            <button id="episode-${realIndex}" onclick="playVideo('${episode}','${vodName.replace(/"/g, '&quot;')}', ${realIndex}, '${String(sourceCode || '').replace(/'/g, '&#39;')}')"
                     class="px-4 py-2 bg-[#222] hover:bg-[#333] border border-[#333] rounded-lg transition-colors text-center episode-btn">
                 第${realIndex + 1}集
             </button>
@@ -868,7 +871,7 @@ function toggleEpisodeOrder() {
     // 重新渲染剧集区域，使用 currentVideoTitle 作为视频标题
     const episodesGrid = document.getElementById('episodesGrid');
     if (episodesGrid) {
-        episodesGrid.innerHTML = renderEpisodes(currentVideoTitle);
+        episodesGrid.innerHTML = renderEpisodes(currentVideoTitle, currentVideoSource);
     }
     
     // 更新按钮文本和箭头方向

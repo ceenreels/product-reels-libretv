@@ -312,14 +312,15 @@
             }
 
             // 设置页面标题
-            document.title = currentVideoTitle + ' - 剧美天下播放器';
+            const playerLabel = globalThis.LibretvI18n ? globalThis.LibretvI18n.t('playerTitle', currentLocale, 'Player') : 'Player';
+            document.title = `${currentVideoTitle} - ${playerLabel}`;
             document.getElementById('videoTitle').textContent = currentVideoTitle;
             
             // 初始化播放器
             if (videoUrl) {
                 initPlayer(videoUrl);
             } else {
-                showError('无效的视频链接');
+                showError(i18nText('invalidVideoUrl', '视频链接无效，请尝试其他视频源'));
             }
 
             // 更新集数信息
@@ -439,7 +440,7 @@
 
             const playableVideoUrl = await resolvePlayableVideoUrl(videoUrl);
             if (!playableVideoUrl) {
-                showError('视频链接解析失败，请尝试其他视频源');
+                showError(i18nText('parseVideoError', '视频链接解析失败，请尝试其他视频源'));
                 return;
             }
 
@@ -576,7 +577,7 @@
                                             // 仅在多次恢复尝试后显示错误
                                             if (errorCount > 3 && !errorDisplayed) {
                                                 errorDisplayed = true;
-                                                showError('视频加载失败，可能是格式不兼容或源不可用');
+                                                showError(i18nText('sourceError', '当前视频源加载失败'));
                                             }
                                             break;
                                     }
@@ -611,7 +612,7 @@
                     console.log('发生错误，但视频已在播放中，忽略');
                     return;
                 }
-                showError('视频播放失败，请检查视频源或网络连接');
+                showError(i18nText('playbackError', '视频播放失败，请检查当前视频源或尝试其他来源'));
             });
             
             // 添加seeking和seeked事件监听器，以检测用户是否在拖动进度条
@@ -696,8 +697,7 @@
                 if (document.getElementById('loading').style.display !== 'none') {
                     document.getElementById('loading').innerHTML = `
                         <div class="loading-spinner"></div>
-                        <div>视频加载时间较长，请耐心等待...</div>
-                        <div style="font-size: 12px; color: #aaa; margin-top: 10px;">如长时间无响应，请尝试其他视频源</div>
+                        <div>${i18nText('slowLoading', '视频源加载时间较长，请耐心等待；如无响应请尝试其他视频源')}</div>
                     `;
                 }
             }, 10000);
@@ -745,6 +745,10 @@
             }
             
             return filteredLines.join('\n');
+        }
+
+        function i18nText(key, fallback) {
+            return globalThis.LibretvI18n ? globalThis.LibretvI18n.t(key, currentLocale, fallback) : fallback;
         }
 
         // 显示错误
@@ -838,7 +842,7 @@
             document.getElementById('loading').style.display = 'flex';
             document.getElementById('loading').innerHTML = `
                 <div class="loading-spinner"></div>
-                <div>正在加载视频...</div>
+                <div>${i18nText('playerLoading', '正在加载视频...')}</div>
             `;
             
             const url = currentEpisodes[index];
@@ -847,7 +851,7 @@
 
             const playableVideoUrl = await resolvePlayableVideoUrl(url);
             if (!playableVideoUrl) {
-                showError('视频链接解析失败，请尝试其他视频源');
+                showError(i18nText('parseVideoError', '视频链接解析失败，请尝试其他视频源'));
                 return;
             }
             

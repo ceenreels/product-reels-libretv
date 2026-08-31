@@ -109,3 +109,25 @@ test('homepage loads the recommendation cache before app startup and uses a boun
   assert.match(appJs, /createRecommendationCache/);
   assert.match(appJs, /read\(cacheKey,\s*RECOMMENDATION_CACHE_TTL\)/);
 });
+
+test('playback links preserve each result source code across episodes', () => {
+  assert.match(appJs, /function\s+playVideo\s*\(url,\s*vod_name,\s*episodeIndex\s*=\s*0,\s*sourceCode/);
+  assert.match(appJs, /player\.html\?url=.*source_code=/);
+  assert.match(appJs, /renderEpisodes\(vod_name,\s*sourceCode\)/);
+  assert.match(appJs, /playVideo\(prevUrl,\s*currentVideoTitle,\s*prevIndex,\s*currentVideoSource\)/);
+  assert.match(appJs, /playVideo\(nextUrl,\s*currentVideoTitle,\s*nextIndex,\s*currentVideoSource\)/);
+});
+
+test('homepage loads i18n scripts before all business scripts', () => {
+  assert.ok(indexHtml.indexOf('src="js/i18n/messages.js"') < indexHtml.indexOf('src="js/ui.js"'));
+  assert.ok(indexHtml.indexOf('src="js/i18n/index.js"') < indexHtml.indexOf('src="js/source-routing.js"'));
+  assert.ok(indexHtml.indexOf('src="js/i18n/index.js"') < indexHtml.indexOf('src="js/api.js"'));
+});
+
+test('player routes visible failures through localized source-aware messages', () => {
+  assert.match(playerHtml, /LibretvI18n\.t/);
+  assert.match(playerHtml, /sourceError/);
+  assert.doesNotMatch(playerHtml, /document\.title\s*=\s*currentVideoTitle\s*\+\s*' - 剧美天下播放器'/);
+  assert.match(playerHtml, /function\s+i18nText|LibretvI18n\.t\(['"]sourceError/);
+  assert.match(playerHtml, /LibretvI18n\.t\(['"]playerTitle/);
+});
