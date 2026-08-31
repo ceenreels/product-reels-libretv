@@ -2,7 +2,7 @@
 
 Implemented homepage locale, region, and source-mode controls with persistence keys, browser/legacy migration, translated DOM aria handling, route status, SEO hreflang links, and responsive styling.
 
-Commit: `2042244a39f42c6511fb95ac7182f67848aa8dba`
+Commit: `86d0cf14d99acb2d015d99b1267802f021dc0cec`
 
 Tests: `node --test tests/ads-html.test.js tests/i18n-routing.test.js` (35 passed); `npm test` (46 passed).
 
