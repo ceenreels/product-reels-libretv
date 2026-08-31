@@ -37,5 +37,53 @@
     var global=all.filter(function(id){var s=info(id,map[id],0); return (s.regions||[]).some(function(r){return /^GLOBAL_/.test(r);})&&eligible.indexOf(id)<0&&same.indexOf(id)<0;});
     return eligible.concat(same,global);
   }
-  root.LibretvRouting={resolveSourceMode:function(o){o=o||{}; var map=sourceMap(); if (o.storedMode==='manual'||o.storedMode==='aggregated'||o.storedMode==='region') return o.storedMode; return (o.storedSource && Object.prototype.hasOwnProperty.call(map,o.storedSource)) ? 'manual' : 'region';},getEligibleSources:getEligibleSources,getFallbackSources:getFallbackSources,recordSourceSuccess:recordSourceSuccess,recordSourceFailure:recordSourceFailure,isSourceHealthy:isSourceHealthy};
+  function normalizeLocale(value) {
+    if (root.LibretvI18n && typeof root.LibretvI18n.normalizeLocale === 'function') return root.LibretvI18n.normalizeLocale(value);
+    var v = String(value || '').replace('_', '-').toLowerCase();
+    if (v === 'zh-tw' || v === 'zh-hk') return 'zh-TW';
+    if (v === 'zh-cn' || v === 'zh-sg' || v === 'zh') return 'zh-CN';
+    if (v === 'en' || v === 'en-us' || v === 'en-gb') return 'en';
+    return null;
+  }
+  function browserContext() {
+    var locale = null, region = null;
+    try {
+      var storedLocale = root.localStorage && (root.localStorage.getItem('locale') || root.localStorage.getItem('currentLocale'));
+      var storedRegion = root.localStorage && (root.localStorage.getItem('region') || root.localStorage.getItem('currentRegion'));
+      locale = normalizeLocale(storedLocale);
+      if (root.LibretvI18n && typeof root.LibretvI18n.resolveLocale === 'function') locale = locale || root.LibretvI18n.resolveLocale({ browserLanguages: root.navigator && root.navigator.languages });
+      if (root.LibretvI18n && typeof root.LibretvI18n.resolveRegion === 'function') region = root.LibretvI18n.resolveRegion({ storedRegion: storedRegion || '', locale: locale, browserLanguages: root.navigator && root.navigator.languages });
+    } catch (_) {}
+    return { locale: locale || 'zh-CN', region: region || (locale === 'en' ? 'GLOBAL_EN' : 'GLOBAL_ZH') };
+  }
+  function getRequestContext(input) {
+    var params;
+    try { params = input && input.searchParams ? input.searchParams : new URL(input || '', root.location && root.location.href || 'https://jumeitianxia.com').searchParams; } catch (_) { params = new URLSearchParams(''); }
+    var browser = browserContext();
+    var locale = normalizeLocale(params.get('locale')) || browser.locale;
+    var validRegions = { CN:1, TW:1, HK:1, SG:1, GLOBAL_EN:1, GLOBAL_ZH:1 };
+    var regionParam = String(params.get('region') || '').toUpperCase();
+    var region = validRegions[regionParam] ? regionParam : browser.region;
+    var map = sourceMap();
+    var rawMode = String(params.get('sourceMode') || '').toLowerCase();
+    var source = String(params.get('source') || '');
+    var sourceKnown = source && Object.prototype.hasOwnProperty.call(map, source) && source !== 'custom' && source !== 'aggregated';
+    var sourceMode = ['aggregated','region','manual','custom'].indexOf(rawMode) >= 0 ? rawMode : (source === 'custom' ? 'custom' : source === 'aggregated' ? 'aggregated' : sourceKnown ? 'manual' : 'region');
+    return { locale: locale, region: region, sourceMode: sourceMode, selectedSource: sourceMode === 'manual' && sourceKnown ? source : '' };
+  }
+  function buildSourcePlan(context) {
+    context = context || {};
+    var mode = context.sourceMode || 'region';
+    if (mode === 'custom') return { primary: [], fallback: [] };
+    if (mode === 'manual') {
+      var selected = getEligibleSources({ mode: 'manual', selectedSource: context.selectedSource });
+      return { primary: selected, fallback: [] };
+    }
+    var primary = getEligibleSources({ locale: context.locale, region: context.region, mode: mode });
+    var fallback = getFallbackSources({ locale: context.locale, region: context.region });
+    fallback = fallback.filter(function(id) { return primary.indexOf(id) < 0; });
+    if (mode === 'region' && primary.length > 1) primary = primary.slice(0, 1);
+    return { primary: primary, fallback: fallback };
+  }
+  root.LibretvRouting={resolveSourceMode:function(o){o=o||{}; var map=sourceMap(); if (o.storedMode==='manual'||o.storedMode==='aggregated'||o.storedMode==='region') return o.storedMode; return (o.storedSource && Object.prototype.hasOwnProperty.call(map,o.storedSource)) ? 'manual' : 'region';},getEligibleSources:getEligibleSources,getFallbackSources:getFallbackSources,recordSourceSuccess:recordSourceSuccess,recordSourceFailure:recordSourceFailure,isSourceHealthy:isSourceHealthy,getRequestContext:getRequestContext,buildSourcePlan:buildSourcePlan};
 })(globalThis);

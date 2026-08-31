@@ -13,6 +13,19 @@ const loadScripts = async paths => {
   return sandbox;
 };
 
+const loadApiSandbox = async fetchImpl => {
+  const { readFile } = await import('node:fs/promises');
+  const vm = await import('node:vm');
+  const sandbox = { console, URL, URLSearchParams, setTimeout, clearTimeout, AbortController, fetch: fetchImpl };
+  sandbox.globalThis = sandbox;
+  sandbox.window = sandbox;
+  sandbox.location = { origin: 'https://jumeitianxia.com' };
+  for (const path of ['js/config.js', 'js/source-routing.js', 'js/api.js']) {
+    vm.runInNewContext(await readFile(new URL('../' + path, import.meta.url), 'utf8'), sandbox, { filename: path });
+  }
+  return sandbox;
+};
+
 test('locale resolution prefers stored selection and falls back by language', async () => {
   const sandbox = await loadScripts(['js/i18n/messages.js', 'js/i18n/index.js']);
   assert.equal(sandbox.LibretvI18n.resolveLocale({ storedLocale: 'zh-TW', browserLanguages: ['en-US'] }), 'zh-TW');
@@ -93,4 +106,48 @@ test('source health records failures, clears on success, and expires after five 
   routing.recordSourceFailure('ffzy', 3000);
   assert.equal(routing.isSourceHealthy('ffzy', 302999), false);
   assert.equal(routing.isSourceHealthy('ffzy', 303000), true);
+});
+
+test('request context is explicit and does not depend on a global user country', async () => {
+  const sandbox = await loadScripts(['js/config.js', 'js/source-routing.js']);
+  const url = new URL('https://jumeitianxia.com/api/search?locale=zh-TW&region=TW&sourceMode=aggregated');
+  assert.deepEqual({ ...sandbox.LibretvRouting.getRequestContext(url) }, {
+    locale: 'zh-TW', region: 'TW', sourceMode: 'aggregated', selectedSource: ''
+  });
+});
+
+test('source plan has primary and fallback layers', async () => {
+  const sandbox = await loadScripts(['js/config.js', 'js/source-routing.js']);
+  const plan = sandbox.LibretvRouting.buildSourcePlan({ locale: 'en', region: 'GLOBAL_EN', sourceMode: 'aggregated' });
+  assert.deepEqual([...plan.primary], []);
+  assert.ok(plan.fallback.length > 0);
+});
+
+test('aggregated search returns primary results and routing metadata', async () => {
+  const sandbox = await loadApiSandbox(async () => ({ ok: true, text: async () => JSON.stringify({ list: [{ vod_id: '1', vod_name: 'Primary', vod_pic: 'https://img.test/a.jpg' }] }) }));
+  const payload = JSON.parse(await sandbox.handleApiRequest(new URL('https://jumeitianxia.com/api/search?wd=x&locale=zh-CN&region=CN&sourceMode=aggregated')));
+  assert.equal(payload.code, 200);
+  assert.ok(payload.list.length > 0);
+  assert.equal(payload.routing.fellBack, false);
+  assert.ok(payload.routing.usedSources.length > 0);
+});
+
+test('aggregated search falls back when every primary source fails', async () => {
+  const sandbox = await loadApiSandbox(async () => ({ ok: true, text: async () => JSON.stringify({ list: [{ vod_id: '2', vod_name: 'Fallback', vod_pic: 'https://img.test/b.jpg' }] }) }));
+  const payload = JSON.parse(await sandbox.handleApiRequest(new URL('https://jumeitianxia.com/api/search?wd=x&locale=en&region=GLOBAL_EN&sourceMode=aggregated')));
+  assert.equal(payload.code, 200);
+  assert.equal(payload.routing.fellBack, true);
+  assert.ok(payload.list.length > 0);
+});
+
+test('one primary source failure does not block another source', async () => {
+  const sandbox = await loadApiSandbox(async (input) => {
+    const target = decodeURIComponent(String(input).slice('https://r.jina.ai/'.length));
+    if (target.includes('ffzy5')) return { ok: false, status: 500, text: async () => '{}' };
+    return { ok: true, text: async () => JSON.stringify({ list: [{ vod_id: target.includes('tyyszy') ? '3' : '4', vod_name: 'Other', vod_pic: 'https://img.test/c.jpg' }] }) };
+  });
+  const payload = JSON.parse(await sandbox.handleApiRequest(new URL('https://jumeitianxia.com/api/search?wd=x&locale=zh-CN&region=CN&sourceMode=aggregated')));
+  assert.equal(payload.code, 200);
+  assert.ok(payload.list.length > 0);
+  assert.equal(payload.routing.fellBack, false);
 });

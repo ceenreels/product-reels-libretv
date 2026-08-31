@@ -72,6 +72,24 @@ document.addEventListener('DOMContentLoaded', function() {
 let recommendationPage = 1;
 const RECOMMENDATION_PAGE_SIZE = 12;
 
+function getPageRoutingParams(sourceOverride) {
+    const source = sourceOverride || currentApiSource;
+    const sourceMode = source === 'custom' ? 'custom' : source === 'aggregated' ? 'aggregated' : 'manual';
+    let locale = 'zh-CN', region = 'GLOBAL_ZH';
+    try {
+        const storedLocale = localStorage.getItem('locale') || localStorage.getItem('currentLocale') || '';
+        const storedRegion = localStorage.getItem('region') || localStorage.getItem('currentRegion') || '';
+        locale = (typeof LibretvI18n !== 'undefined' && LibretvI18n.resolveLocale)
+            ? LibretvI18n.resolveLocale({ storedLocale, browserLanguages: navigator.languages }) : (storedLocale || locale);
+        region = (typeof LibretvI18n !== 'undefined' && LibretvI18n.resolveRegion)
+            ? LibretvI18n.resolveRegion({ storedRegion, locale, browserLanguages: navigator.languages }) : (storedRegion || region);
+    } catch (_) {}
+    const params = new URLSearchParams({ locale, region, sourceMode });
+    if (sourceMode === 'manual') params.set('source', source);
+    if (sourceMode === 'custom') params.set('source', 'custom');
+    return params.toString();
+}
+
 async function loadRecommendations() {
     const area = document.getElementById('recommendationArea');
     const container = document.getElementById('recommendationResults');
@@ -86,7 +104,14 @@ async function loadRecommendations() {
     container.innerHTML = '<div class="col-span-full text-center text-gray-500 py-8">推荐内容加载中...</div>';
 
     try {
-        const response = await fetch(`/api/recommendations?source=${encodeURIComponent(source)}&page=${recommendationPage}`);
+        const routeSource = currentApiSource === 'aggregated' ? 'aggregated' : source;
+        const routeMode = currentApiSource === 'custom' ? 'custom' : routeSource;
+        const routeParams = getPageRoutingParams(routeSource);
+        const query = new URLSearchParams(routeParams);
+        query.set('sourceMode', routeMode);
+        if (routeMode === 'custom') query.set('source', source);
+        query.set('page', recommendationPage);
+        const response = await fetch(`/api/recommendations?${query.toString()}`);
         const data = await response.json();
 
         if (!response.ok || data.code === 400 || !Array.isArray(data.list)) {
@@ -452,7 +477,7 @@ async function search() {
                 apiParams = '&customApi=' + encodeURIComponent(customApiUrl) + '&source=custom';
             }
         } else {
-            apiParams = '&source=' + currentApiSource;
+            apiParams = '&' + getPageRoutingParams(currentApiSource);
         }
         
         // 添加超时处理

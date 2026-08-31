@@ -56,6 +56,26 @@ function buildProxyUrl(targetUrl) {
     return `${PROXY_URL}${encodeURIComponent(targetUrl)}`;
 }
 
+function getRoutingContext(url) {
+    if (typeof LibretvRouting !== 'undefined' && LibretvRouting.getRequestContext) {
+        return LibretvRouting.getRequestContext(url);
+    }
+    return { locale: url.searchParams.get('locale') || 'zh-CN', region: url.searchParams.get('region') || 'GLOBAL_ZH', sourceMode: url.searchParams.get('sourceMode') || 'region', selectedSource: url.searchParams.get('source') || '' };
+}
+
+function getSourcePlan(context) {
+    if (typeof LibretvRouting !== 'undefined' && LibretvRouting.buildSourcePlan) return LibretvRouting.buildSourcePlan(context);
+    return { primary: [], fallback: [] };
+}
+
+function markSourceSuccess(source) {
+    if (typeof LibretvRouting !== 'undefined' && LibretvRouting.recordSourceSuccess) LibretvRouting.recordSourceSuccess(source);
+}
+
+function markSourceFailure(source) {
+    if (typeof LibretvRouting !== 'undefined' && LibretvRouting.recordSourceFailure) LibretvRouting.recordSourceFailure(source);
+}
+
 function isValidCoverUrl(value) {
     return typeof value === 'string' && /^https?:\/\//i.test(value.trim());
 }
@@ -127,13 +147,21 @@ async function handleApiRequest(url) {
             }
             
             // 处理聚合搜索
-            if (source === 'aggregated') {
-                return await handleAggregatedSearch(searchQuery);
+            const context = getRoutingContext(url);
+            if (source === 'aggregated' || context.sourceMode === 'aggregated' || context.sourceMode === 'region') {
+                if (context.sourceMode === 'custom') return await handleMultipleCustomSearch(searchQuery, customApi);
+                if (source !== 'aggregated' && context.sourceMode === 'region' && context.selectedSource) {
+                    // Explicit concrete source requests retain the legacy manual path below.
+                } else {
+                    return await handleAggregatedSearch(searchQuery, context);
+                }
             }
             
             // 处理多个自定义API搜索
             if (source === 'custom' && multipleApis && customApi.includes(CUSTOM_API_CONFIG.separator)) {
-                return await handleMultipleCustomSearch(searchQuery, customApi);
+                const customResult = JSON.parse(await handleMultipleCustomSearch(searchQuery, customApi));
+                customResult.routing = { locale: context.locale, region: context.region, requestedSources: ['custom'], usedSources: customResult.list?.length ? ['custom'] : [], fellBack: false };
+                return JSON.stringify(customResult);
             }
             
             const apiUrl = customApi
@@ -162,6 +190,7 @@ async function handleApiRequest(url) {
                 if (!data || !Array.isArray(data.list)) {
                     throw new Error('API返回的数据格式无效');
                 }
+                if (source !== 'custom') markSourceSuccess(source);
                 
                 // 添加源信息到每个结果
                 data.list.forEach(item => {
@@ -176,59 +205,58 @@ async function handleApiRequest(url) {
                 return JSON.stringify({
                     code: 200,
                     list: data.list || [],
+                    routing: { locale: context.locale, region: context.region, requestedSources: [source], usedSources: [source], fellBack: false }
                 });
             } catch (fetchError) {
                 clearTimeout(timeoutId);
+                if (source !== 'custom' && API_SITES[source]) markSourceFailure(source);
                 throw fetchError;
             }
         }
 
         if (url.pathname === '/api/recommendations') {
+            const context = getRoutingContext(url);
             const requestedSource = url.searchParams.get('source') || DEFAULT_API_SOURCE;
-            const sourceCode = API_SITES[requestedSource] ? requestedSource : DEFAULT_API_SOURCE;
+            const plan = getSourcePlan(context);
+            const routed = context.sourceMode === 'aggregated' || context.sourceMode === 'region';
+            const sourceCandidates = routed ? plan.primary.concat(plan.fallback) : [API_SITES[requestedSource] ? requestedSource : DEFAULT_API_SOURCE];
             const page = Math.max(1, Number.parseInt(url.searchParams.get('page') || '1', 10) || 1);
-            const detailUrl = `${API_SITES[sourceCode].api}${API_CONFIG.recommendations.path}${page}`;
-
-            const controller = new AbortController();
-            const timeoutId = setTimeout(() => controller.abort(), API_REQUEST_TIMEOUT);
-
-            try {
-                const response = await fetch(buildProxyUrl(detailUrl), {
-                    headers: API_CONFIG.search.headers,
-                    signal: controller.signal
-                });
-
-                clearTimeout(timeoutId);
-
-                if (!response.ok) {
-                    throw new Error(`推荐请求失败: ${response.status}`);
+            let sourceCode = '', data = null, emptyData = null, emptySource = '', fellBack = false, usedSources = [];
+            for (let i = 0; i < sourceCandidates.length; i++) {
+                const candidate = sourceCandidates[i];
+                if (!API_SITES[candidate]) continue;
+                try {
+                    const detailUrl = `${API_SITES[candidate].api}${API_CONFIG.recommendations.path}${page}`;
+                    const controller = new AbortController();
+                    const timeoutId = setTimeout(() => controller.abort(), API_REQUEST_TIMEOUT);
+                    let response;
+                    try {
+                        response = await fetch(buildProxyUrl(detailUrl), { headers: API_CONFIG.search.headers, signal: controller.signal });
+                    } finally {
+                        clearTimeout(timeoutId);
+                    }
+                    if (!response.ok) throw new Error(`推荐请求失败: ${response.status}`);
+                    const payload = await readApiResponse(response);
+                    if (!payload || !Array.isArray(payload.list)) throw new Error('推荐接口返回的数据格式无效');
+                    markSourceSuccess(candidate);
+                    if (!payload.list.length) { emptyData = payload; emptySource = candidate; continue; }
+                    usedSources.push(candidate);
+                    sourceCode = candidate; data = payload; fellBack = routed && i >= plan.primary.length;
+                    break;
+                } catch (error) {
+                    markSourceFailure(candidate);
                 }
-
-                const data = await readApiResponse(response);
-                if (!data || !Array.isArray(data.list)) {
-                    throw new Error('推荐接口返回的数据格式无效');
-                }
-
-                // 前端只展示首屏 12 条，避免为不可见条目额外消耗代理请求。
-                await enrichRecommendationCovers(data.list.slice(0, 12), sourceCode);
-
-                data.list.forEach(item => {
-                    item.source_name = API_SITES[sourceCode].name;
-                    item.source_code = sourceCode;
-                });
-
-                return JSON.stringify({
-                    code: 200,
-                    list: data.list
-                });
-            } catch (fetchError) {
-                clearTimeout(timeoutId);
-                throw fetchError;
             }
+            if (!data && emptyData) { data = emptyData; sourceCode = emptySource; usedSources.push(emptySource); fellBack = routed && plan.primary.indexOf(emptySource) < 0; }
+            if (!data) throw new Error('推荐内容加载失败');
+            await enrichRecommendationCovers(data.list.slice(0, 12), sourceCode);
+            data.list.forEach(item => { item.source_name = API_SITES[sourceCode].name; item.source_code = sourceCode; });
+            return JSON.stringify({ code: 200, list: data.list, routing: { locale: context.locale, region: context.region, requestedSources: sourceCandidates, usedSources, fellBack } });
         }
 
         // 聚合搜索的详情处理 - 需要根据存储在数据中的源信息获取
         if (url.pathname === '/api/detail') {
+            const context = getRoutingContext(url);
             const id = url.searchParams.get('id');
             const sourceCode = url.searchParams.get('source') || 'heimuer'; // 获取源代码
             
@@ -277,6 +305,7 @@ async function handleApiRequest(url) {
                 if (!data || !data.list || !Array.isArray(data.list) || data.list.length === 0) {
                     throw new Error('获取到的详情内容无效');
                 }
+                if (sourceCode !== 'custom') markSourceSuccess(sourceCode);
                 
                 // 获取第一个匹配的视频详情
                 const videoDetail = data.list[0];
@@ -312,6 +341,7 @@ async function handleApiRequest(url) {
                     code: 200,
                     episodes: episodes,
                     detailUrl: detailUrl,
+                    routing: { locale: context.locale, region: context.region, requestedSources: [sourceCode], usedSources: [sourceCode], fellBack: false },
                     // 添加更多视频详情，以便前端展示
                     videoInfo: {
                         title: videoDetail.vod_name,
@@ -330,6 +360,7 @@ async function handleApiRequest(url) {
                 });
             } catch (fetchError) {
                 clearTimeout(timeoutId);
+                if (sourceCode !== 'custom' && API_SITES[sourceCode]) markSourceFailure(sourceCode);
                 throw fetchError;
             }
         }
@@ -483,111 +514,48 @@ async function handleJisuDetail(id, sourceCode) {
 }
 
 // 新增: 处理聚合搜索
-async function handleAggregatedSearch(searchQuery) {
-    // 获取可用的API源列表（排除aggregated和custom）
-    const availableSources = Object.keys(API_SITES).filter(key => 
-        key !== 'aggregated' && key !== 'custom'
-    );
-    
-    if (availableSources.length === 0) {
-        throw new Error('没有可用的API源');
-    }
-    
-    // 创建所有API源的搜索请求
-    const searchPromises = availableSources.map(async (source) => {
+async function handleAggregatedSearch(searchQuery, context) {
+    context = context || { locale: 'zh-CN', region: 'GLOBAL_ZH', sourceMode: 'aggregated', selectedSource: '' };
+    const plan = getSourcePlan(context);
+    const requestedSources = plan.primary.concat(plan.fallback);
+    if (!requestedSources.length) return JSON.stringify({ code: 200, list: [], msg: '没有可用的API源', routing: { locale: context.locale, region: context.region, requestedSources, usedSources: [], fellBack: false } });
+
+    const fetchSource = async source => {
         try {
             const apiUrl = `${API_SITES[source].api}${API_CONFIG.search.path}${encodeURIComponent(searchQuery)}`;
-            
-            // 使用Promise.race添加超时处理
-            const timeoutPromise = new Promise((_, reject) => 
-                setTimeout(() => reject(new Error(`${source}源搜索超时`)), 8000)
-            );
-            
-            const fetchPromise = fetch(buildProxyUrl(apiUrl), {
-                headers: API_CONFIG.search.headers
-            });
-            
-            const response = await Promise.race([fetchPromise, timeoutPromise]);
-            
-            if (!response.ok) {
-                throw new Error(`${source}源请求失败: ${response.status}`);
+            let timeoutId;
+            const timeoutPromise = new Promise((_, reject) => { timeoutId = setTimeout(() => reject(new Error(`${source}源搜索超时`)), 8000); });
+            let response;
+            try {
+                response = await Promise.race([fetch(buildProxyUrl(apiUrl), { headers: API_CONFIG.search.headers }), timeoutPromise]);
+            } finally {
+                clearTimeout(timeoutId);
             }
-            
+            if (!response.ok) throw new Error(`${source}源请求失败: ${response.status}`);
             const data = await readApiResponse(response);
-            
-            if (!data || !Array.isArray(data.list)) {
-                throw new Error(`${source}源返回的数据格式无效`);
-            }
-            
-            // 为搜索结果添加源信息
-            const results = data.list.map(item => ({
-                ...item,
-                source_name: API_SITES[source].name,
-                source_code: source
-            }));
-            
-            return results;
+            if (!data || !Array.isArray(data.list)) throw new Error(`${source}源返回的数据格式无效`);
+            markSourceSuccess(source);
+            return data.list.map(item => ({ ...item, source_name: API_SITES[source].name, source_code: source }));
         } catch (error) {
+            markSourceFailure(source);
             console.warn(`${source}源搜索失败:`, error);
-            return []; // 返回空数组表示该源搜索失败
+            return [];
         }
-    });
-    
-    try {
-        // 并行执行所有搜索请求
-        const resultsArray = await Promise.all(searchPromises);
-        
-        // 合并所有结果
-        let allResults = [];
-        resultsArray.forEach(results => {
-            if (Array.isArray(results) && results.length > 0) {
-                allResults = allResults.concat(results);
-            }
-        });
-        
-        // 如果没有搜索结果，返回空结果
-        if (allResults.length === 0) {
-            return JSON.stringify({
-                code: 200,
-                list: [],
-                msg: '所有源均无搜索结果'
-            });
-        }
-        
-        // 去重（根据vod_id和source_code组合）
-        const uniqueResults = [];
-        const seen = new Set();
-        
-        allResults.forEach(item => {
-            const key = `${item.source_code}_${item.vod_id}`;
-            if (!seen.has(key)) {
-                seen.add(key);
-                uniqueResults.push(item);
-            }
-        });
-        
-        // 按照视频名称和来源排序
-        uniqueResults.sort((a, b) => {
-            // 首先按照视频名称排序
-            const nameCompare = (a.vod_name || '').localeCompare(b.vod_name || '');
-            if (nameCompare !== 0) return nameCompare;
-            
-            // 如果名称相同，则按照来源排序
-            return (a.source_name || '').localeCompare(b.source_name || '');
-        });
-        
-        return JSON.stringify({
-            code: 200,
-            list: uniqueResults,
-        });
-    } catch (error) {
-        console.error('聚合搜索处理错误:', error);
-        return JSON.stringify({
-            code: 400,
-            msg: '聚合搜索处理失败: ' + error.message,
-            list: []
-        });
-    }
+    };
+    let usedSources = [];
+    const runLayer = async sources => {
+        const pairs = await Promise.all(sources.map(async source => [source, await fetchSource(source)]));
+        pairs.forEach(([source, results]) => { if (results.length) usedSources.push(source); });
+        return pairs.flatMap(([, results]) => results);
+    };
+    let allResults = await runLayer(plan.primary);
+    let fellBack = false;
+    if (!allResults.length && plan.fallback.length) { fellBack = true; allResults = await runLayer(plan.fallback); }
+    const uniqueResults = [];
+    const seen = new Set();
+    allResults.forEach(item => { const key = `${item.source_code}_${item.vod_id}`; if (!seen.has(key)) { seen.add(key); uniqueResults.push(item); } });
+    uniqueResults.sort((a, b) => (a.vod_name || '').localeCompare(b.vod_name || '') || (a.source_name || '').localeCompare(b.source_name || ''));
+    return JSON.stringify({ code: 200, list: uniqueResults, routing: { locale: context.locale, region: context.region, requestedSources, usedSources, fellBack } });
 }
 
 // 新增：处理多个自定义API源的聚合搜索
