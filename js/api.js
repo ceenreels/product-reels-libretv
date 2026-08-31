@@ -167,6 +167,7 @@ async function handleApiRequest(url) {
     let attemptedRoutingSources = null;
     let routingUsedSources = [];
     let routingFellBack = false;
+    let routingNoEligibleSources = false;
     
     try {
         if (url.pathname === '/api/search') {
@@ -265,6 +266,7 @@ async function handleApiRequest(url) {
             if (!routed && !isEnabledApiSource(requestedSource)) throw new Error('无效或已禁用的API来源');
             const sourceCandidates = routed ? plan.primary.concat(plan.fallback) : [requestedSource];
             attemptedRoutingSources = sourceCandidates.slice();
+            routingNoEligibleSources = routed && sourceCandidates.length === 0;
             const page = Math.max(1, Number.parseInt(url.searchParams.get('page') || '1', 10) || 1);
             let sourceCode = '', data = null, emptyData = null, emptySource = '', emptyFellBack = false, fellBack = false, usedSources = [];
             for (let i = 0; i < sourceCandidates.length; i++) {
@@ -429,7 +431,7 @@ async function handleApiRequest(url) {
                 const plan = context.sourceMode === 'custom' ? { primary: ['custom'], fallback: [] } : getSourcePlan({ ...context, capability: url.pathname === '/api/recommendations' ? 'recommendations' : 'search' });
                 requestedSources = plan.primary.concat(plan.fallback);
             }
-            routing = { locale: context.locale, region: context.region, requestedSources, usedSources: routingUsedSources, fellBack: routingFellBack };
+            routing = { locale: context.locale, region: context.region, requestedSources, usedSources: routingUsedSources, fellBack: routingFellBack, ...(routingNoEligibleSources ? { noEligibleSources: true } : {}) };
         } catch (_) {}
         return JSON.stringify({
             code: 400,

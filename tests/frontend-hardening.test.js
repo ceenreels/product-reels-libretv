@@ -82,6 +82,14 @@ test('invalidating an active search clears the stale loading overlay', async () 
   assert.equal(hidden, 1);
 });
 
+test('persisted source validation rejects prototype and disabled sources', async () => {
+  const sandbox = await load(appSource, { API_SITES: { ffzy: { enabled: true }, disabled: { enabled: false } } });
+  assert.equal(sandbox.hasUsableApiSource('toString'), false);
+  assert.equal(sandbox.hasUsableApiSource('__proto__'), false);
+  assert.equal(sandbox.hasUsableApiSource('disabled'), false);
+  assert.equal(sandbox.hasUsableApiSource('ffzy'), true);
+});
+
 test('stale recommendation response cannot overwrite newer route state', async () => {
   let resolveFirst;
   let resolveSecond;

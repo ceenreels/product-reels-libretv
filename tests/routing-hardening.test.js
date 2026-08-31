@@ -108,6 +108,15 @@ test('recommendation fallback reports true and the selected source when fallback
   assert.equal(payload.routing.usedSources.length, 1);
 });
 
+test('recommendations distinguish no eligible sources from provider failure', async () => {
+  const sandbox = await loadApi(async () => ({ ok: false, status: 503, text: async () => '{}' }));
+  vm.runInNewContext("Object.keys(API_SITES).forEach(key => { API_SITES[key].enabled = false; });", sandbox);
+  const payload = JSON.parse(await sandbox.handleApiRequest(new URL('https://jumeitianxia.com/api/recommendations?page=1&locale=zh-CN&region=CN&sourceMode=region')));
+  assert.equal(payload.code, 400);
+  assert.equal(payload.routing.noEligibleSources, true);
+  assert.deepEqual(payload.routing.usedSources, []);
+});
+
 test('aggregated search distinguishes no eligible sources from eligible sources with no results', async () => {
   const noEligible = await loadApi(async () => ({ ok: true, text: async () => JSON.stringify({ list: [] }) }));
   vm.runInNewContext("Object.keys(API_SITES).forEach(key => { API_SITES[key].enabled = false; });", noEligible);

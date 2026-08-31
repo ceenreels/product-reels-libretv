@@ -29,6 +29,14 @@ const recommendationCache = typeof createRecommendationCache === 'function'
     ? createRecommendationCache()
     : null;
 
+function hasUsableApiSource(source) {
+    return typeof API_SITES !== 'undefined'
+        && API_SITES
+        && Object.prototype.hasOwnProperty.call(API_SITES, source)
+        && API_SITES[source]
+        && API_SITES[source].enabled !== false;
+}
+
 function parseCustomApiUrls() {
     if (!customApiUrl) return [];
     return customApiUrl.split(CUSTOM_API_CONFIG.separator)
@@ -82,9 +90,9 @@ document.addEventListener('DOMContentLoaded', function() {
     if (!hasPersistedLocale && typeof LibretvI18n !== 'undefined') currentLocale = getUrlLocaleHint(location.search) || currentLocale;
     currentLocale = (typeof LibretvI18n !== 'undefined' ? LibretvI18n.resolveLocale({storedLocale: currentLocale, browserLanguages: navigator.languages}) : (currentLocale || 'zh-CN'));
     currentRegion = (typeof LibretvI18n !== 'undefined' ? LibretvI18n.resolveRegion({storedRegion: currentRegion, locale: currentLocale, browserLanguages: navigator.languages}) : (currentRegion || 'GLOBAL_ZH'));
-    if (!sourceMode) sourceMode = (storedApiSource && API_SITES[storedApiSource]) ? 'manual' : 'region';
+    if (!sourceMode) sourceMode = (storedApiSource && hasUsableApiSource(storedApiSource)) ? 'manual' : 'region';
     if (sourceMode === 'region' || sourceMode === 'aggregated' || sourceMode === 'custom') currentApiSource = sourceMode;
-    if (sourceMode === 'manual' && !API_SITES[currentApiSource]) currentApiSource = DEFAULT_API_SOURCE;
+    if (sourceMode === 'manual' && !hasUsableApiSource(currentApiSource)) currentApiSource = DEFAULT_API_SOURCE;
     localStorage.setItem('libretv:locale', currentLocale); localStorage.setItem('libretv:region', currentRegion); localStorage.setItem('libretv:sourceMode', sourceMode);
     LibretvI18n?.apply(document, currentLocale);
     populateApiSourceOptions();
