@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { createAdManager } from '../js/ads/manager.js';
 import { createAdsterraProvider, getResponsiveBanner } from '../js/ads/providers/adsterra.js';
 import { createJuicyAdsProvider } from '../js/ads/providers/juicyads.js';
+import { ADS_CONFIG } from '../js/ads/config.js';
 
 test('one provider can be disabled without preventing another provider', async () => {
   const calls = [];
@@ -171,4 +172,41 @@ test('JuicyAds responsive banner chooses the mobile snippet on a narrow viewport
   await provider.init({ document: documentRef });
   await provider.mount('ad-juicy-responsive-banner', slot, { document: documentRef });
   assert.equal(nodes[0].attributes['data-height'], '50');
+});
+
+test('JuicyAds responsive banner chooses the desktop snippet on a wide viewport', async () => {
+  const nodes = [];
+  const documentRef = {
+    defaultView: { innerWidth: 1280 },
+    head: { appendChild() {} },
+    body: { appendChild() {} },
+    createElement: tag => ({
+      tagName: tag.toUpperCase(),
+      dataset: {},
+      attributes: {},
+      setAttribute(name, value) { this.attributes[name] = value; },
+      appendChild(node) { nodes.push(node); }
+    })
+  };
+  const slot = { dataset: {}, appendChild(node) { nodes.push(node); }, querySelector() { return null; } };
+  const provider = createJuicyAdsProvider({
+    enabled: true,
+    slotSnippets: {
+      'ad-juicy-home-banner': {
+        desktop: '<ins data-width="728" data-height="90"></ins>',
+        mobile: '<ins data-width="300" data-height="50"></ins>'
+      }
+    }
+  });
+  await provider.init({ document: documentRef });
+  await provider.mount('ad-juicy-home-banner', slot, { document: documentRef });
+  assert.equal(nodes[0].attributes['data-width'], '728');
+  assert.equal(nodes[0].attributes['data-height'], '90');
+});
+
+test('homepage JuicyAds desktop zone uses the newly created leaderboard zone', () => {
+  const desktopSnippet = ADS_CONFIG.providers.juicyads.slotSnippets['ad-juicy-home-banner'].desktop;
+  assert.match(desktopSnippet, /id="1125830"/);
+  assert.match(desktopSnippet, /data-width="728"/);
+  assert.match(desktopSnippet, /data-height="90"/);
 });
