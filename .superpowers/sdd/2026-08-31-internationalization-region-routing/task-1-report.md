@@ -40,3 +40,14 @@
 ## concerns
 
 - 现有 `API_SITES` 尚未携带完整语言/地区元数据；本任务提供默认推断，Task 2 可在注册表中补充显式字段与路由测试。
+
+## Review fixes
+
+- Expanded all three locale dictionaries with visible search, settings, recommendation, source status, player, error, footer, about, and privacy keys.
+- `resolveSourceMode` now validates an implicit persisted source against known `API_SITES`; unknown values fall back to `region`.
+
+Fix verification:
+
+`node --test tests/i18n-routing.test.js`: 4 tests passed, 0 failed.
+
+`node --test tests/*.test.js`: 25 tests passed, 0 failed.

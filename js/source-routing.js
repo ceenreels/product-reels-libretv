@@ -25,5 +25,5 @@
     var global=all.filter(function(id){var s=info(id,map[id],0); return (s.regions||[]).some(function(r){return /^GLOBAL_/.test(r);})&&eligible.indexOf(id)<0&&same.indexOf(id)<0;});
     return eligible.concat(same,global);
   }
-  root.LibretvRouting={resolveSourceMode:function(o){o=o||{}; return o.storedMode==='manual'||o.storedMode==='aggregated'||o.storedMode==='region' ? o.storedMode : (o.storedSource ? 'manual' : 'region');},getEligibleSources:getEligibleSources,getFallbackSources:getFallbackSources};
+  root.LibretvRouting={resolveSourceMode:function(o){o=o||{}; var map=sourceMap(); if (o.storedMode==='manual'||o.storedMode==='aggregated'||o.storedMode==='region') return o.storedMode; return (o.storedSource && map[o.storedSource]) ? 'manual' : 'region';},getEligibleSources:getEligibleSources,getFallbackSources:getFallbackSources};
 })(globalThis);

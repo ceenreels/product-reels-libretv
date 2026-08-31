@@ -26,3 +26,16 @@ test('region resolution maps locale regions and language groups', async () => {
   assert.equal(sandbox.LibretvI18n.resolveRegion({ storedRegion: '', locale: 'en', browserLanguages: ['en-US'] }), 'GLOBAL_EN');
   assert.equal(sandbox.LibretvI18n.resolveRegion({ storedRegion: 'HK', locale: 'en', browserLanguages: ['en-US'] }), 'HK');
 });
+
+test('message dictionaries cover all visible UI categories', async () => {
+  const sandbox = await loadScripts(['js/i18n/messages.js', 'js/i18n/index.js']);
+  const required = ['search','searchPlaceholder','recommendations','recommendationDescription','recommendationLoading','chooseSource','settings','aggregated','customApi','customApiDescription','recentSearches','clearHistory','yellowFilter','yellowFilterDescription','adFilter','adFilterDescription','sourceStatus','sourceHealthy','sourceUnavailable','loading','playerLoading','playerError','tryAgain','noEpisodes','autoplay','reverseOrder','previousEpisode','nextEpisode','episodeList','shortcutHint','networkError','timeoutError','apiError','unknownError','footer','about','privacy','backHome','privacyLocalStorage','privacyAds','privacyVideoServices','privacyChoices','privacyUpdates'];
+  for (const locale of sandbox.SUPPORTED_LOCALES) for (const key of required) assert.equal(typeof sandbox.MESSAGES[locale][key], 'string', `${locale}.${key}`);
+});
+
+test('invalid stored source does not force manual mode', async () => {
+  const sandbox = await loadScripts(['js/source-routing.js']);
+  sandbox.API_SITES = { ffzy: {} };
+  assert.equal(sandbox.LibretvRouting.resolveSourceMode({ storedSource: 'missing' }), 'region');
+  assert.equal(sandbox.LibretvRouting.resolveSourceMode({ storedMode: 'manual', storedSource: 'missing' }), 'manual');
+});
