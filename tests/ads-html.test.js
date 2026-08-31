@@ -6,6 +6,7 @@ const indexHtml = await readFile(new URL('../index.html', import.meta.url), 'utf
 const playerHtml = await readFile(new URL('../player.html', import.meta.url), 'utf8');
 const robotsTxt = await readFile(new URL('../robots.txt', import.meta.url), 'utf8');
 const sitemapXml = await readFile(new URL('../sitemap.xml', import.meta.url), 'utf8');
+const stylesCss = await readFile(new URL('../css/styles.css', import.meta.url), 'utf8');
 
 test('homepage publishes the JuicyAds verification meta tag', () => {
   assert.match(indexHtml, /<meta name="juicyads-site-verification" content="ca6903256a7a8f7d9985abf9ceab0a93">/);
@@ -31,4 +32,11 @@ test('sitemap includes current deployment date and key public pages', () => {
 
 test('homepage JuicyAds banner appears before recommendation cards for better viewability', () => {
   assert.ok(indexHtml.indexOf('id="ad-juicy-home-banner"') < indexHtml.indexOf('id="recommendationResults"'));
+});
+
+test('JuicyAds responsive slots reserve the rendered ad height instead of a shared 250px height', () => {
+  assert.match(stylesCss, /\.ad-juicy-responsive-banner\s*\{[^}]*min-height:\s*90px/);
+  assert.match(stylesCss, /#ad-juicy-player-banner\s*\{[^}]*min-height:\s*250px/);
+  assert.match(stylesCss, /@media\s*\(max-width:\s*519px\)[\s\S]*#ad-juicy-home-banner[\s\S]*min-height:\s*50px/);
+  assert.match(stylesCss, /@media\s*\(max-width:\s*519px\)[\s\S]*#ad-juicy-player-banner[\s\S]*min-height:\s*50px/);
 });
