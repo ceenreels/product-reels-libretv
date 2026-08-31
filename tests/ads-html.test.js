@@ -8,6 +8,7 @@ const robotsTxt = await readFile(new URL('../robots.txt', import.meta.url), 'utf
 const sitemapXml = await readFile(new URL('../sitemap.xml', import.meta.url), 'utf8');
 const stylesCss = await readFile(new URL('../css/styles.css', import.meta.url), 'utf8');
 const privacyHtml = await readFile(new URL('../privacy.html', import.meta.url), 'utf8');
+const appJs = await readFile(new URL('../js/app.js', import.meta.url), 'utf8');
 
 test('homepage publishes the JuicyAds verification meta tag', () => {
   assert.match(indexHtml, /<meta name="juicyads-site-verification" content="ca6903256a7a8f7d9985abf9ceab0a93">/);
@@ -45,4 +46,10 @@ test('JuicyAds responsive slots reserve the rendered ad height instead of a shar
 test('privacy page discloses third-party advertising and local storage accurately', () => {
   assert.doesNotMatch(privacyHtml, /不收集任何个人数据|不会限制访问|不会存储或追踪用户信息/);
   assert.match(privacyHtml, /第三方广告|Cookie|localStorage|本地存储/i);
+});
+
+test('homepage loads the recommendation cache before app startup and uses a bounded stale fallback', () => {
+  assert.ok(indexHtml.indexOf('src="js/recommendation-cache.js"') < indexHtml.indexOf('src="js/app.js"'));
+  assert.match(appJs, /createRecommendationCache/);
+  assert.match(appJs, /read\(cacheKey,\s*RECOMMENDATION_CACHE_TTL\)/);
 });

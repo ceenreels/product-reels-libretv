@@ -16,6 +16,11 @@ let episodesReversed = false;
 
 // 新增：解析多个自定义API源
 let customApiUrls = [];
+const RECOMMENDATION_CACHE_TTL = 6 * 60 * 60 * 1000;
+const recommendationCache = typeof createRecommendationCache === 'function'
+    ? createRecommendationCache()
+    : null;
+
 function parseCustomApiUrls() {
     if (!customApiUrl) return [];
     return customApiUrl.split(CUSTOM_API_CONFIG.separator)
@@ -75,6 +80,7 @@ async function loadRecommendations() {
     const source = currentApiSource === 'custom' || currentApiSource === 'aggregated'
         ? DEFAULT_API_SOURCE
         : currentApiSource;
+    const cacheKey = `${source}:page:${recommendationPage}`;
 
     area.classList.remove('hidden');
     container.innerHTML = '<div class="col-span-full text-center text-gray-500 py-8">推荐内容加载中...</div>';
@@ -87,9 +93,16 @@ async function loadRecommendations() {
             throw new Error(data.msg || '推荐内容加载失败');
         }
 
-        renderRecommendations(data.list.slice(0, RECOMMENDATION_PAGE_SIZE));
+        const items = data.list.slice(0, RECOMMENDATION_PAGE_SIZE);
+        recommendationCache?.save(cacheKey, items);
+        renderRecommendations(items);
     } catch (error) {
         console.error('加载推荐内容失败:', error);
+        const cachedItems = recommendationCache?.read(cacheKey, RECOMMENDATION_CACHE_TTL);
+        if (cachedItems?.length) {
+            renderRecommendations(cachedItems);
+            return;
+        }
         container.innerHTML = '<div class="col-span-full text-center text-gray-500 py-8">暂时无法加载推荐内容，请稍后重试</div>';
     }
 }
