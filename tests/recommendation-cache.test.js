@@ -52,3 +52,11 @@ test('recommendation cache accepts canonical route keys without duplicating its 
   assert.ok(storage.getItem(routeKey));
   assert.equal(storage.getItem(`libretv:recommendations:${routeKey}`), null);
 });
+
+test('recommendation cache reads the legacy source-and-page key shape', () => {
+  const storage = createMemoryStorage();
+  const cache = createRecommendationCache(storage, () => 1000);
+  storage.setItem('libretv:recommendations:ffzy:page:1', JSON.stringify({ savedAt: 1000, items: [{ vod_id: 8 }] }));
+
+  assert.equal(JSON.stringify(cache.read('ffzy:page:1', 600)), JSON.stringify([{ vod_id: 8 }]));
+});

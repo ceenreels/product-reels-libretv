@@ -215,12 +215,15 @@ async function loadRecommendations() {
         let legacyCacheSource = '';
         if (!cachedItems?.length) {
             for (const candidate of getLegacyRecommendationSources({ source, sourceMode, plan })) {
-                const legacyItems = recommendationCache?.read(candidate, RECOMMENDATION_CACHE_TTL);
-                if (legacyItems?.length) {
-                    cachedItems = legacyItems;
-                    legacyCacheSource = candidate;
-                    break;
+                for (const legacyKey of [`${candidate}:page:${recommendationPage}`, candidate]) {
+                    const legacyItems = recommendationCache?.read(legacyKey, RECOMMENDATION_CACHE_TTL);
+                    if (legacyItems?.length) {
+                        cachedItems = legacyItems;
+                        legacyCacheSource = candidate;
+                        break;
+                    }
                 }
+                if (cachedItems?.length) break;
             }
         }
         if (cachedItems?.length) {
@@ -276,6 +279,16 @@ function renderRecommendations(items, options = {}) {
         const title = document.createElement('h3');
         title.className = 'font-medium text-sm line-clamp-2 min-h-[2.5rem]';
         title.textContent = item.vod_name || '未知视频';
+        const isLegacyCache = Boolean(legacySource && !item.source_code);
+        if (isLegacyCache) {
+            const legacyBadge = document.createElement('span');
+            const legacyLabel = LibretvI18n?.t('legacyCache', currentLocale, 'Legacy cache') || 'Legacy cache';
+            legacyBadge.className = 'legacy-cache-badge inline-flex items-center rounded-full bg-amber-900/40 px-2 py-0.5 text-[10px] text-amber-200';
+            legacyBadge.setAttribute('role', 'status');
+            legacyBadge.setAttribute('aria-label', legacyLabel);
+            legacyBadge.textContent = legacyLabel;
+            content.appendChild(legacyBadge);
+        }
         const meta = document.createElement('p');
         meta.className = 'text-xs text-gray-500 mt-2 truncate';
         meta.textContent = item.vod_remarks || item.vod_year || '点击查看详情';

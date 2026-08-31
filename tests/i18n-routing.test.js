@@ -242,4 +242,47 @@ test('recommendation cache keys and cards preserve route and source identity', (
   assert.match(appSource, /selectedSource:\s*currentApiSource/);
   assert.match(appSource, /customApiUrl/);
   assert.match(appSource, /item\.source_code\s*\|\|\s*legacySource/);
+  assert.match(appSource, /candidate\}:page:\$\{recommendationPage\}/);
+});
+
+test('legacy recommendation cards render an accessible visible cache marker', async () => {
+  const vm = await import('node:vm');
+  const makeElement = tagName => ({
+    tagName: tagName.toUpperCase(),
+    children: [],
+    className: '',
+    textContent: '',
+    listeners: {},
+    append(...nodes) { this.children.push(...nodes); },
+    appendChild(node) { this.children.push(node); },
+    addEventListener(name, handler) { this.listeners[name] = handler; },
+    setAttribute(name, value) { this[name] = value; }
+  });
+  const container = makeElement('div');
+  const sandbox = {
+    console,
+    URL,
+    URLSearchParams,
+    localStorage: { getItem() { return null; }, setItem() {} },
+    navigator: { languages: ['en-US'] },
+    location: { search: '' },
+    DEFAULT_API_SOURCE: 'ffzy',
+    CUSTOM_API_CONFIG: { separator: ',', maxSources: 3 },
+    API_SITES: { ffzy: {} },
+    LibretvI18n: { t(key, locale, fallback) { return key === 'legacyCache' ? 'Legacy cache' : (fallback || key); } },
+    document: {
+      addEventListener() {},
+      getElementById(id) { return id === 'recommendationResults' ? container : null; },
+      createElement: makeElement
+    },
+    window: { open() {} }
+  };
+  sandbox.globalThis = sandbox;
+  vm.runInNewContext(appSource, sandbox, { filename: 'js/app.js' });
+
+  sandbox.renderRecommendations([{ vod_id: 'legacy-1', vod_name: 'Legacy item' }], { legacySource: 'ffzy' });
+
+  const renderedText = JSON.stringify(container);
+  assert.match(renderedText, /Legacy cache/);
+  assert.match(renderedText, /legacy-cache/);
 });
