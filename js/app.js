@@ -156,6 +156,7 @@ async function loadRecommendations() {
     area.classList.remove('hidden');
     container.innerHTML = `<div class="col-span-full text-center text-gray-500 py-8">${LibretvI18n?.t('recommendationLoading', currentLocale, 'Loading recommendations...')}</div>`;
 
+    let recommendationFallback = false;
     try {
         const routeSource = currentApiSource === 'aggregated' ? 'aggregated' : source;
         const routeMode = sourceMode || (currentApiSource === 'custom' ? 'custom' : routeSource);
@@ -167,23 +168,24 @@ async function loadRecommendations() {
         query.set('page', recommendationPage);
         const response = await fetch(`/api/recommendations?${query.toString()}`);
         const data = await response.json();
+        recommendationFallback = data?.routing?.fellBack === true;
 
         if (!response.ok || data.code === 400 || !Array.isArray(data.list)) {
             throw new Error(data.msg || '推荐内容加载失败');
         }
 
         const items = data.list.slice(0, RECOMMENDATION_PAGE_SIZE);
-        recommendationCache?.save(cacheKey, items); updateRouteStatus(data.routing?.fellBack);
+        recommendationCache?.save(cacheKey, items); updateRouteStatus(recommendationFallback);
         renderRecommendations(items);
     } catch (error) {
         console.error('加载推荐内容失败:', error);
         const cachedItems = recommendationCache?.read(cacheKey, RECOMMENDATION_CACHE_TTL);
         if (cachedItems?.length) {
-            renderRecommendations(cachedItems); updateRouteStatus(true);
+            renderRecommendations(cachedItems); updateRouteStatus(recommendationFallback);
             return;
         }
         container.innerHTML = `<div class="col-span-full text-center text-gray-500 py-8">${LibretvI18n?.t('recommendationError', currentLocale, 'Recommendations unavailable')}</div>`;
-        updateRouteStatus(true);
+        updateRouteStatus(recommendationFallback);
     }
 }
 

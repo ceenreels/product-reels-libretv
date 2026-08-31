@@ -45,7 +45,22 @@ test('route status and metadata messages are localized in every supported locale
   for (const locale of ['zh-CN', 'zh-TW', 'en']) {
     assert.ok(sandbox.LibretvI18n.t('routeStatus', locale).length > 2);
     assert.ok(sandbox.LibretvI18n.t('siteDescription', locale).length > 10);
+    assert.ok(sandbox.LibretvI18n.t('closeModal', locale).length > 2);
   }
+});
+
+test('i18n apply localizes aria labels for homepage controls', async () => {
+  const sandbox = await loadScripts(['js/i18n/messages.js', 'js/i18n/index.js']);
+  const closeButton = {
+    getAttribute(name) { return name === 'data-i18n-aria-label' ? 'closeModal' : null; },
+    setAttribute(name, value) { if (name === 'aria-label') this.ariaLabel = value; }
+  };
+  const doc = {
+    querySelectorAll(selector) { return selector === '[data-i18n-aria-label]' ? [closeButton] : []; },
+    documentElement: {}
+  };
+  sandbox.LibretvI18n.apply(doc, 'en');
+  assert.equal(closeButton.ariaLabel, 'Close dialog');
 });
 
 test('region resolution maps locale regions and language groups', async () => {

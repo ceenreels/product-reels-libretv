@@ -26,6 +26,7 @@ test('homepage marks static copy and aria labels for all locales', () => {
   assert.match(indexHtml, /data-i18n-placeholder="searchPlaceholder"/);
   assert.match(indexHtml, /data-i18n-aria-label="searchButton"/);
   assert.match(indexHtml, /data-i18n-aria-label="closeSettings"/);
+  assert.match(indexHtml, /data-i18n-aria-label="closeModal"/);
   assert.match(indexHtml, /data-i18n-aria-label="ad"/);
 });
 
@@ -40,7 +41,14 @@ test('routing context and recommendation cache include persisted controls and so
   assert.match(appJs, /getItem\(['"]libretv:region['"]\).*getItem\(['"]region['"]/s);
   assert.match(appJs, /selectedSource\s*:\s*currentApiSource/);
   assert.match(appJs, /customApiUrl/);
-  assert.match(appJs, /data\.routing\?\.fellBack/);
+  assert.match(appJs, /data\??\.routing\?\.fellBack/);
+});
+
+test('recommendation fallback status tracks response metadata on errors and cache hits', () => {
+  assert.match(appJs, /let\s+recommendationFallback\s*=\s*false/);
+  assert.match(appJs, /recommendationFallback\s*=\s*data\??\.routing\?\.fellBack\s*===\s*true/);
+  assert.match(appJs, /updateRouteStatus\(recommendationFallback\)/);
+  assert.doesNotMatch(appJs, /updateRouteStatus\(true\)/);
 });
 
 test('metadata updates all localized social fields', () => {
