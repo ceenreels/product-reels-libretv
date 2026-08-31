@@ -64,3 +64,33 @@ test('English users fall back without pretending Chinese sources are English', a
   assert.equal(primary.length, 0);
   assert.ok(fallback.length > 0);
 });
+
+test('fallback excludes region-limited sources from incompatible regions', async () => {
+  const sandbox = await loadScripts(['js/source-routing.js']);
+  sandbox.API_SITES = {
+    cnOnly: { languages: ['zh-CN'], regions: ['CN'], defaultEligible: true, enabled: true, capabilities: { search: true }, priority: 10 },
+    globalZh: { languages: ['zh-CN'], regions: ['GLOBAL_ZH'], defaultEligible: true, enabled: true, capabilities: { search: true }, priority: 5 }
+  };
+  const fallback = sandbox.LibretvRouting.getFallbackSources({ locale: 'zh-TW', region: 'TW' });
+  assert.ok(!fallback.includes('cnOnly'));
+  assert.ok(fallback.includes('globalZh'));
+});
+
+test('missing eligibility metadata is excluded from automatic routing but remains manually selectable', async () => {
+  const sandbox = await loadScripts(['js/source-routing.js']);
+  sandbox.API_SITES = { unannotated: { languages: ['zh-CN'], regions: ['CN'], capabilities: { search: true } } };
+  assert.deepEqual([...sandbox.LibretvRouting.getEligibleSources({ locale: 'zh-CN', region: 'CN', mode: 'aggregated' })], []);
+  assert.deepEqual([...sandbox.LibretvRouting.getEligibleSources({ mode: 'manual', selectedSource: 'unannotated' })], ['unannotated']);
+});
+
+test('source health records failures, clears on success, and expires after five minutes', async () => {
+  const sandbox = await loadScripts(['js/source-routing.js']);
+  const routing = sandbox.LibretvRouting;
+  routing.recordSourceFailure('ffzy', 1000);
+  assert.equal(routing.isSourceHealthy('ffzy', 1001), false);
+  routing.recordSourceSuccess('ffzy', 2000);
+  assert.equal(routing.isSourceHealthy('ffzy', 2001), true);
+  routing.recordSourceFailure('ffzy', 3000);
+  assert.equal(routing.isSourceHealthy('ffzy', 302999), false);
+  assert.equal(routing.isSourceHealthy('ffzy', 303000), true);
+});

@@ -26,3 +26,17 @@ Results: focused suite 7/7 passed; full suite 28/28 passed.
 
 - English fallback intentionally returns source-provided Chinese content; no English API is invented.
 - Health state is process-memory only and expires after five minutes; it is not persisted or transmitted.
+
+## Review fix round 1
+
+### RED
+
+Added regressions for incompatible-region fallback leakage and unannotated-source automatic eligibility. Focused test run: 2 failures (the region-limited source leaked into TW fallback; missing `defaultEligible` was treated as eligible). Health behavior test passed against the existing implementation.
+
+### GREEN
+
+Updated fallback filtering to require region compatibility or a `GLOBAL_*` region, changed missing `defaultEligible` to conservative false for automatic routing, and retained manual selection. Added health coverage for failure suppression, success recovery, and the exact five-minute expiry boundary.
+
+Commands: `node --test tests/i18n-routing.test.js` and `node --test`.
+
+Results: focused 10/10 passed; full suite 31/31 passed.
