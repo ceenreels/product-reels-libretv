@@ -40,3 +40,7 @@ Latest verification: `node --test tests/i18n-routing.test.js` — 20 passed.
 
 - Recommendation routing now snapshots attempted source IDs before health mutations, preserving accurate `requestedSources` on total failure; `usedSources` and `fellBack` reflect actual outcomes.
 - Added regression coverage asserting failed primary sources remain present in failure metadata.
+
+## Review fix round 2 follow-up
+
+- Failure responses now use the captured recommendation source list directly and avoid recomputing a health-mutated plan; attempted IDs remain stable while `usedSources` and `fellBack` reflect this request only.

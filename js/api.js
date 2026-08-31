@@ -407,8 +407,11 @@ async function handleApiRequest(url) {
         let routing;
         try {
             const context = getRoutingContext(url);
-            const plan = context.sourceMode === 'custom' ? { primary: ['custom'], fallback: [] } : getSourcePlan({ ...context, capability: url.pathname === '/api/recommendations' ? 'recommendations' : 'search' });
-            const requestedSources = attemptedRoutingSources || plan.primary.concat(plan.fallback);
+            let requestedSources = attemptedRoutingSources;
+            if (!requestedSources) {
+                const plan = context.sourceMode === 'custom' ? { primary: ['custom'], fallback: [] } : getSourcePlan({ ...context, capability: url.pathname === '/api/recommendations' ? 'recommendations' : 'search' });
+                requestedSources = plan.primary.concat(plan.fallback);
+            }
             routing = { locale: context.locale, region: context.region, requestedSources, usedSources: routingUsedSources, fellBack: routingFellBack };
         } catch (_) {}
         return JSON.stringify({
