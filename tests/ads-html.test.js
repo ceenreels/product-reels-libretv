@@ -10,6 +10,15 @@ const stylesCss = await readFile(new URL('../css/styles.css', import.meta.url), 
 const privacyHtml = await readFile(new URL('../privacy.html', import.meta.url), 'utf8');
 const appJs = await readFile(new URL('../js/app.js', import.meta.url), 'utf8');
 
+test('homepage exposes locale, region, source mode, and SEO language links', () => {
+  assert.match(indexHtml, /id="localeSelect"/);
+  assert.match(indexHtml, /id="regionSelect"/);
+  assert.match(indexHtml, /id="sourceModeSelect"/);
+  assert.match(indexHtml, /hreflang="zh-CN"/);
+  assert.match(indexHtml, /hreflang="zh-TW"/);
+  assert.match(indexHtml, /hreflang="en"/);
+});
+
 test('homepage publishes the JuicyAds verification meta tag', () => {
   assert.match(indexHtml, /<meta name="juicyads-site-verification" content="ca6903256a7a8f7d9985abf9ceab0a93">/);
 });

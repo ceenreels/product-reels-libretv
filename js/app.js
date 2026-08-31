@@ -5,6 +5,9 @@ let currentApiSource = storedApiSource === 'heimuer'
     ? DEFAULT_API_SOURCE
     : (storedApiSource || DEFAULT_API_SOURCE);
 let customApiUrl = localStorage.getItem('customApiUrl') || '';
+let currentLocale = localStorage.getItem('libretv:locale') || localStorage.getItem('locale') || localStorage.getItem('currentLocale') || '';
+let currentRegion = localStorage.getItem('libretv:region') || localStorage.getItem('region') || localStorage.getItem('currentRegion') || '';
+let sourceMode = localStorage.getItem('libretv:sourceMode') || '';
 // 添加当前播放的集数索引
 let currentEpisodeIndex = 0;
 // 添加当前视频的所有集数
@@ -31,6 +34,17 @@ function parseCustomApiUrls() {
 
 // 页面初始化
 document.addEventListener('DOMContentLoaded', function() {
+    const hasPersistedLocale = !!(localStorage.getItem('libretv:locale') || localStorage.getItem('locale') || localStorage.getItem('currentLocale'));
+    if (!hasPersistedLocale && typeof LibretvI18n !== 'undefined') currentLocale = LibretvI18n.getUrlLocale(location.search) || currentLocale;
+    currentLocale = (typeof LibretvI18n !== 'undefined' ? LibretvI18n.resolveLocale({storedLocale: currentLocale, browserLanguages: navigator.languages}) : (currentLocale || 'zh-CN'));
+    currentRegion = (typeof LibretvI18n !== 'undefined' ? LibretvI18n.resolveRegion({storedRegion: currentRegion, locale: currentLocale, browserLanguages: navigator.languages}) : (currentRegion || 'GLOBAL_ZH'));
+    if (!sourceMode) sourceMode = (storedApiSource && API_SITES[storedApiSource]) ? 'manual' : 'region';
+    if (sourceMode === 'manual' && !API_SITES[currentApiSource]) currentApiSource = DEFAULT_API_SOURCE;
+    localStorage.setItem('libretv:locale', currentLocale); localStorage.setItem('libretv:region', currentRegion); localStorage.setItem('libretv:sourceMode', sourceMode);
+    LibretvI18n?.apply(document, currentLocale);
+    updateMetadata();
+    const localeEl=document.getElementById('localeSelect'), regionEl=document.getElementById('regionSelect'), modeEl=document.getElementById('sourceModeSelect');
+    if(localeEl) localeEl.value=currentLocale; if(regionEl) regionEl.value=currentRegion; if(modeEl) modeEl.value=sourceMode;
     // 初始化时检查是否使用自定义接口
     if (currentApiSource === 'custom') {
         document.getElementById('customApiInput').classList.remove('hidden');
@@ -39,7 +53,7 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 
     // 设置 select 的默认选中值
-    document.getElementById('apiSource').value = currentApiSource;
+    document.getElementById('apiSource').value = sourceMode === 'region' ? 'region' : currentApiSource;
 
     // 初始化显示当前站点代码
     document.getElementById('currentCode').textContent = currentApiSource;
@@ -67,26 +81,42 @@ document.addEventListener('DOMContentLoaded', function() {
     
     // 设置事件监听器
     setupEventListeners();
+    updateRouteStatus();
 });
+
+function updateRouteStatus(fallback) {
+    const el=document.getElementById('routeStatus'); if(!el) return;
+    const label = typeof LibretvI18n !== 'undefined' ? LibretvI18n.t('routeStatus', currentLocale, 'Route') : 'Route';
+    el.textContent = `${label}: ${currentLocale} · ${currentRegion} · ${sourceMode}${fallback ? ' · ' + (LibretvI18n?.t('fallback', currentLocale, 'fallback')) : ''}`;
+}
+function updateMetadata() {
+    const title = LibretvI18n?.t('search', currentLocale, 'Video search') || 'Video search';
+    const descText = LibretvI18n?.t('recommendationDescription', currentLocale, title) || title;
+    document.title = `${title} - 剧美天下`;
+    const desc = document.querySelector('meta[name="description"]'); if (desc) desc.content = descText;
+    const og = document.querySelector('meta[property="og:title"]'); if (og) og.content = document.title;
+    const ogd = document.querySelector('meta[property="og:description"]'); if (ogd) ogd.content = descText;
+    const twd = document.querySelector('meta[property="twitter:description"]'); if (twd) twd.content = descText;
+}
 
 let recommendationPage = 1;
 const RECOMMENDATION_PAGE_SIZE = 12;
 
 function getPageRoutingParams(sourceOverride) {
     const source = sourceOverride || currentApiSource;
-    const sourceMode = source === 'custom' ? 'custom' : source === 'aggregated' ? 'aggregated' : 'manual';
-    let locale = 'zh-CN', region = 'GLOBAL_ZH';
+    const mode = sourceMode || (source === 'custom' ? 'custom' : source === 'aggregated' ? 'aggregated' : 'manual');
+    let locale = currentLocale, region = currentRegion;
     try {
-        const storedLocale = localStorage.getItem('locale') || localStorage.getItem('currentLocale') || '';
-        const storedRegion = localStorage.getItem('region') || localStorage.getItem('currentRegion') || '';
+        const storedLocale = currentLocale || localStorage.getItem('libretv:locale') || localStorage.getItem('locale') || localStorage.getItem('currentLocale') || '';
+        const storedRegion = currentRegion || localStorage.getItem('libretv:region') || localStorage.getItem('region') || localStorage.getItem('currentRegion') || '';
         locale = (typeof LibretvI18n !== 'undefined' && LibretvI18n.resolveLocale)
             ? LibretvI18n.resolveLocale({ storedLocale, browserLanguages: navigator.languages }) : (storedLocale || locale);
         region = (typeof LibretvI18n !== 'undefined' && LibretvI18n.resolveRegion)
             ? LibretvI18n.resolveRegion({ storedRegion, locale, browserLanguages: navigator.languages }) : (storedRegion || region);
     } catch (_) {}
-    const params = new URLSearchParams({ locale, region, sourceMode });
-    if (sourceMode === 'manual') params.set('source', source);
-    if (sourceMode === 'custom') params.set('source', 'custom');
+    const params = new URLSearchParams({ locale, region, sourceMode: mode });
+    if (mode === 'manual') params.set('source', source);
+    if (mode === 'custom') params.set('source', 'custom');
     return params.toString();
 }
 
@@ -98,14 +128,15 @@ async function loadRecommendations() {
     const source = currentApiSource === 'custom' || currentApiSource === 'aggregated'
         ? DEFAULT_API_SOURCE
         : currentApiSource;
-    const cacheKey = `${source}:page:${recommendationPage}`;
+    const planKey = (typeof LibretvRouting !== 'undefined' && LibretvRouting.buildSourcePlan) ? LibretvRouting.buildSourcePlan({locale: currentLocale, region: currentRegion, sourceMode}).primary.join(',') : sourceMode;
+    const cacheKey = `${currentLocale}:${currentRegion}:${sourceMode}:${planKey}:page:${recommendationPage}`;
 
     area.classList.remove('hidden');
     container.innerHTML = '<div class="col-span-full text-center text-gray-500 py-8">推荐内容加载中...</div>';
 
     try {
         const routeSource = currentApiSource === 'aggregated' ? 'aggregated' : source;
-        const routeMode = currentApiSource === 'custom' ? 'custom' : routeSource;
+        const routeMode = sourceMode || (currentApiSource === 'custom' ? 'custom' : routeSource);
         const routeParams = getPageRoutingParams(routeSource);
         const query = new URLSearchParams(routeParams);
         query.set('sourceMode', routeMode);
@@ -120,13 +151,13 @@ async function loadRecommendations() {
         }
 
         const items = data.list.slice(0, RECOMMENDATION_PAGE_SIZE);
-        recommendationCache?.save(cacheKey, items);
+        recommendationCache?.save(cacheKey, items); updateRouteStatus(data.routing?.fellBack);
         renderRecommendations(items);
     } catch (error) {
         console.error('加载推荐内容失败:', error);
         const cachedItems = recommendationCache?.read(cacheKey, RECOMMENDATION_CACHE_TTL);
         if (cachedItems?.length) {
-            renderRecommendations(cachedItems);
+            renderRecommendations(cachedItems); updateRouteStatus(false);
             return;
         }
         container.innerHTML = '<div class="col-span-full text-center text-gray-500 py-8">暂时无法加载推荐内容，请稍后重试</div>';
@@ -343,9 +374,15 @@ async function testCustomApiUrl(url) {
 
 // 设置事件监听器
 function setupEventListeners() {
+    document.getElementById('localeSelect')?.addEventListener('change', e => { currentLocale=e.target.value; localStorage.setItem('libretv:locale',currentLocale); LibretvI18n?.apply(document,currentLocale); updateMetadata(); updateRouteStatus(); resetSearchArea(); recommendationPage=1; loadRecommendations(); });
+    document.getElementById('regionSelect')?.addEventListener('change', e => { currentRegion=e.target.value; localStorage.setItem('libretv:region',currentRegion); updateRouteStatus(); resetSearchArea(); recommendationPage=1; loadRecommendations(); });
+    document.getElementById('sourceModeSelect')?.addEventListener('change', e => { sourceMode=e.target.value; localStorage.setItem('libretv:sourceMode',sourceMode); const a=document.getElementById('apiSource'); if(sourceMode==='region') { currentApiSource='region'; a.value='region'; } else if(sourceMode==='aggregated') { currentApiSource='aggregated'; a.value='aggregated'; } else if(sourceMode==='custom') { currentApiSource='custom'; a.value='custom'; document.getElementById('customApiInput')?.classList.remove('hidden'); } else if(!API_SITES[currentApiSource]) { sourceMode='manual'; currentApiSource=DEFAULT_API_SOURCE; a.value=currentApiSource; } updateRouteStatus(); resetSearchArea(); recommendationPage=1; loadRecommendations(); });
     // API源选择变更事件
     document.getElementById('apiSource').addEventListener('change', async function(e) {
         currentApiSource = e.target.value;
+        if (currentApiSource === 'region') { sourceMode='region'; localStorage.setItem('libretv:sourceMode',sourceMode); updateRouteStatus(); resetSearchArea(); recommendationPage=1; loadRecommendations(); return; }
+        sourceMode = currentApiSource === 'aggregated' ? 'aggregated' : currentApiSource === 'custom' ? 'custom' : 'manual';
+        localStorage.setItem('libretv:sourceMode', sourceMode); const modeEl=document.getElementById('sourceModeSelect'); if(modeEl) modeEl.value=sourceMode;
         const customApiInput = document.getElementById('customApiInput');
         
         if (currentApiSource === 'custom') {

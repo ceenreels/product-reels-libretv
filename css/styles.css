@@ -308,6 +308,9 @@ body {
     transition: background-color 0.3s ease-in-out;
 }
 
+.homepage-controls select { max-width: 100%; }
+@media (max-width: 519px) { .homepage-controls { display: grid; gap: .5rem; } .homepage-controls select { width: 100%; } }
+
 #yellowFilterToggle:checked ~ .toggle-dot {
     box-shadow: 0 2px 4px rgba(0, 204, 255, 0.3);
 }

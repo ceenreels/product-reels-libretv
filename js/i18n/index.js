@@ -43,6 +43,8 @@
     for (var i = 0; i < nodes.length; i++) nodes[i].textContent = t(nodes[i].getAttribute('data-i18n'), locale);
     var placeholders = doc.querySelectorAll('[data-i18n-placeholder]');
     for (var j = 0; j < placeholders.length; j++) placeholders[j].setAttribute('placeholder', t(placeholders[j].getAttribute('data-i18n-placeholder'), locale));
+    var labels = doc.querySelectorAll('[data-i18n-aria-label]');
+    for (var k = 0; k < labels.length; k++) labels[k].setAttribute('aria-label', t(labels[k].getAttribute('data-i18n-aria-label'), locale));
     if (doc.documentElement) doc.documentElement.lang = normalize(locale) || 'en';
   }
   root.LibretvI18n = { SUPPORTED_LOCALES: supported, LOCALE_LABELS: root.LOCALE_LABELS, MESSAGES: messages, normalizeLocale: normalize, resolveLocale: resolveLocale, resolveRegion: resolveRegion, getUrlLocale: getUrlLocale, t: t, apply: apply };
