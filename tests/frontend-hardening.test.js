@@ -75,6 +75,13 @@ test('search and recommendation code contains generation guards', () => {
   assert.match(appSource, /requestGeneration\s*!==\s*searchGeneration/);
 });
 
+test('invalidating an active search clears the stale loading overlay', async () => {
+  let hidden = 0;
+  const sandbox = await load(appSource, { hideLoading: () => { hidden += 1; } });
+  sandbox.invalidateSearchRequests();
+  assert.equal(hidden, 1);
+});
+
 test('stale recommendation response cannot overwrite newer route state', async () => {
   let resolveFirst;
   let resolveSecond;

@@ -58,6 +58,7 @@ function invalidateSearchRequests() {
     searchGeneration += 1;
     searchController?.abort();
     searchController = null;
+    if (typeof hideLoading === 'function') hideLoading();
 }
 
 function populateApiSourceOptions() {
