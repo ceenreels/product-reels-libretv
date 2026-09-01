@@ -67,7 +67,13 @@ export function createJuicyAdsProvider(config = {}) {
             if (snippet && typeof snippet === 'object') {
                 const viewportWidth = (doc?.defaultView || globalThis).innerWidth || 0;
                 const breakpoint = Number.isFinite(snippet.breakpoint) ? snippet.breakpoint : 520;
-                snippet = viewportWidth < breakpoint ? snippet.mobile : snippet.desktop;
+                const desktopVariant = context.config?.desktopVariant;
+                const desktopBreakpoint = Number.isFinite(context.config?.desktopBreakpoint)
+                    ? context.config.desktopBreakpoint
+                    : 1280;
+                snippet = viewportWidth >= desktopBreakpoint && desktopVariant && snippet[desktopVariant]
+                    ? snippet[desktopVariant]
+                    : viewportWidth < breakpoint ? snippet.mobile : snippet.desktop;
             }
             if (doc && snippet) appendJuicySnippet(doc, element, snippet, `juicyads-${slotName}`);
             if (element.dataset) element.dataset.libretvAdProvider = 'juicyads';

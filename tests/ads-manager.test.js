@@ -42,6 +42,76 @@ test('Adsterra chooses a mobile banner for a narrow viewport', () => {
   assert.deepEqual(getResponsiveBanner(1280), { width: 728, height: 90 });
 });
 
+test('Adsterra uses a square creative for a desktop sidebar slot', async () => {
+  const nodes = [];
+  const documentRef = {
+    defaultView: { innerWidth: 1440 },
+    head: { appendChild(node) { nodes.push(node); } },
+    body: { appendChild(node) { nodes.push(node); } },
+    createElement: tag => {
+      const node = { tagName: tag.toUpperCase(), dataset: {}, setAttribute() {} };
+      Object.defineProperty(node, 'onload', {
+        configurable: true,
+        get() { return this._onload; },
+        set(handler) { this._onload = handler; handler?.(); }
+      });
+      return node;
+    }
+  };
+  const slot = {
+    dataset: {},
+    querySelector() { return null; },
+    appendChild(node) { nodes.push(node); }
+  };
+  const provider = createAdsterraProvider({ enabled: true });
+  await provider.init({ document: documentRef });
+  await provider.mount('ad-responsive-banner', slot, {
+    document: documentRef,
+    config: { desktopFormat: 'square', desktopBreakpoint: 1280 }
+  });
+  assert.deepEqual(documentRef.defaultView.atOptions, {
+    key: '96f20abe4e9e5d2c41ea6e4302114ad2',
+    format: 'iframe',
+    height: 250,
+    width: 300,
+    params: {}
+  });
+});
+
+test('JuicyAds uses a desktop sidebar snippet variant when configured', async () => {
+  const nodes = [];
+  const documentRef = {
+    defaultView: { innerWidth: 1440 },
+    head: { appendChild() {} },
+    body: { appendChild() {} },
+    createElement: tag => ({
+      tagName: tag.toUpperCase(),
+      dataset: {},
+      attributes: {},
+      setAttribute(name, value) { this.attributes[name] = value; },
+      appendChild(node) { nodes.push(node); }
+    })
+  };
+  const slot = { dataset: {}, appendChild(node) { nodes.push(node); }, querySelector() { return null; } };
+  const provider = createJuicyAdsProvider({
+    enabled: true,
+    slotSnippets: {
+      'ad-juicy-home-banner': {
+        desktop: '<ins data-width="728" data-height="90"></ins>',
+        sidebar: '<ins data-width="300" data-height="250"></ins>',
+        mobile: '<ins data-width="300" data-height="50"></ins>'
+      }
+    }
+  });
+  await provider.init({ document: documentRef });
+  await provider.mount('ad-juicy-home-banner', slot, {
+    document: documentRef,
+    config: { desktopVariant: 'sidebar', desktopBreakpoint: 1280 }
+  });
+  assert.equal(nodes[0].attributes['data-width'], '300');
+  assert.equal(nodes[0].attributes['data-height'], '250');
+});
+
 test('JuicyAds provider can load a verified script without requiring a DOM slot', async () => {
   const scripts = [];
   const documentRef = {
@@ -209,4 +279,12 @@ test('homepage JuicyAds desktop zone uses the newly created leaderboard zone', (
   assert.match(desktopSnippet, /id="1125830"/);
   assert.match(desktopSnippet, /data-width="728"/);
   assert.match(desktopSnippet, /data-height="90"/);
+});
+
+test('homepage JuicyAds sidebar variant uses the 300x250 creative on desktop', () => {
+  const sidebarSnippet = ADS_CONFIG.providers.juicyads.slotSnippets['ad-juicy-home-banner'].sidebar;
+  assert.match(sidebarSnippet, /id="1125773"/);
+  assert.match(sidebarSnippet, /data-width="300"/);
+  assert.match(sidebarSnippet, /data-height="250"/);
+  assert.equal(ADS_CONFIG.slots['ad-juicy-home-banner'].desktopVariant, 'sidebar');
 });

@@ -75,18 +75,29 @@ function loadBanner(container, documentRef, ad, key) {
         const script = appendScript(container, documentRef, ad.src, key);
         if (!script) return resolve(false);
         let settled = false;
+        let timeoutId = null;
         const finish = () => {
             if (settled) return;
             settled = true;
+            if (timeoutId) clearTimeout(timeoutId);
             resolve(true);
         };
         script.onload = finish;
         script.onerror = finish;
-        setTimeout(finish, 8000);
+        timeoutId = setTimeout(finish, 8000);
+        if (settled) clearTimeout(timeoutId);
     });
 }
 
-function configuredBanner(settings, viewportWidth) {
+function configuredBanner(settings, viewportWidth, slotConfig = {}) {
+    const desktopBreakpoint = Number.isFinite(slotConfig.desktopBreakpoint)
+        ? slotConfig.desktopBreakpoint
+        : 1280;
+    const desktopFormat = slotConfig.desktopFormat;
+    if (desktopFormat && viewportWidth >= desktopBreakpoint && settings.banners[desktopFormat]) {
+        return settings.banners[desktopFormat];
+    }
+
     const responsive = getResponsiveBanner(viewportWidth);
     if (responsive.width === 728) return settings.banners.wide;
     if (responsive.width === 468) return settings.banners.medium;
@@ -133,7 +144,7 @@ export function createAdsterraProvider(config = {}) {
             } else {
                 const selected = slotName === 'ad-square-banner'
                     ? settings.banners.square
-                    : configuredBanner(settings, (doc.defaultView || globalThis).innerWidth || 0);
+                    : configuredBanner(settings, (doc.defaultView || globalThis).innerWidth || 0, context.config || {});
                 bannerQueue = bannerQueue.then(() => loadBanner(element, doc, selected, `adsterra-${slotName}`));
                 await bannerQueue;
             }

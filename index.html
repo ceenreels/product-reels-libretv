@@ -122,7 +122,13 @@
     </div>
 
     <div class="container mx-auto px-4 py-8 flex flex-col h-screen">
-        <div class="flex-1 flex flex-col">
+        <div id="homepageSearchLayout" class="homepage-search-layout flex-1">
+            <aside id="homepageLeftAd" class="homepage-ad-rail homepage-ad-left" data-i18n-aria-label="ad" aria-label="左侧广告位">
+                <div id="ad-square-banner" class="ad-slot ad-square-banner" data-i18n-aria-label="ad" aria-label="广告"></div>
+                <div id="ad-native-banner" class="ad-slot ad-native-banner" data-i18n-aria-label="nativeAd" aria-label="原生广告"></div>
+            </aside>
+
+            <div id="homepageMain" class="flex-1 flex flex-col">
             <!-- 网站标志和口号 -->
             <header class="text-center mb-2">
                 <div class="flex justify-center items-center mb-4">
@@ -164,12 +170,8 @@
                 </div>
             </div>
 
-            <!-- Adsterra 响应式横幅：根据屏幕宽度加载 728x90、468x60 或 320x50 -->
-            <div id="ad-responsive-banner" class="ad-slot ad-responsive-banner" data-i18n-aria-label="ad" aria-label="广告"></div>
-
-            <!-- 首页热门推荐 -->
-            <section id="recommendationArea" class="w-full max-w-7xl mx-auto mt-8 mb-10">
-                <div id="ad-juicy-home-banner" class="ad-slot ad-juicy-responsive-banner" data-i18n-aria-label="juicyAd" aria-label="JuicyAds 广告"></div>
+                <!-- 首页热门推荐 -->
+                <section id="recommendationArea" class="w-full max-w-7xl mx-auto mt-8 mb-10">
                 <div class="flex items-center justify-between mb-4">
                     <div>
                         <h2 class="text-xl font-bold gradient-text" data-i18n="recommendations">热门推荐</h2>
@@ -180,12 +182,10 @@
                         <span data-i18n="changeBatch">换一批</span>
                     </button>
                 </div>
-                <div id="ad-native-banner" class="ad-slot ad-native-banner" data-i18n-aria-label="nativeAd" aria-label="原生广告"></div>
                 <div id="suggestionResults" class="hidden grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-4 mb-4" aria-label="站长推荐"></div>
                 <div id="recommendationResults" class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-4">
                     <div class="col-span-full text-center text-gray-500 py-8" data-i18n="loadingRecommendations">推荐内容加载中...</div>
                 </div>
-                <div id="ad-square-banner" class="ad-slot ad-square-banner" data-i18n-aria-label="ad" aria-label="广告"></div>
             </section>
             
             <!-- 搜索结果：初始隐藏 -->
@@ -194,6 +194,12 @@
                 </div>
             </div>
         </div>
+
+            <aside id="homepageRightAd" class="homepage-ad-rail homepage-ad-right" data-i18n-aria-label="ad" aria-label="右侧广告位">
+                <!-- PC 端使用 300x250 方形创意；窄屏由广告适配器切换为响应式横幅。 -->
+                <div id="ad-responsive-banner" class="ad-slot ad-responsive-banner" data-i18n-aria-label="ad" aria-label="广告"></div>
+                <div id="ad-juicy-home-banner" class="ad-slot ad-juicy-responsive-banner" data-i18n-aria-label="juicyAd" aria-label="JuicyAds 广告"></div>
+            </aside>
     </div>
 
     <!-- 页脚区域 -->

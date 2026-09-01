@@ -193,6 +193,66 @@ body {
     overflow: visible;
 }
 
+/* 首页 PC 端广告侧栏：中间保留搜索与推荐内容，两侧承载方形广告。 */
+.homepage-search-layout {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+}
+
+.homepage-main,
+#homepageMain {
+    min-width: 0;
+}
+
+.homepage-ad-rail {
+    width: 100%;
+    min-width: 0;
+}
+
+.homepage-ad-rail .ad-slot {
+    width: 100%;
+}
+
+@media (min-width: 1280px) {
+    .homepage-search-layout {
+        display: grid;
+        grid-template-columns: minmax(180px, 300px) minmax(0, 1fr) minmax(180px, 300px);
+        align-items: start;
+        column-gap: 1.5rem;
+    }
+
+    .homepage-ad-rail {
+        position: sticky;
+        top: 1rem;
+        padding-top: clamp(7rem, 15vh, 12rem);
+    }
+
+    .homepage-ad-rail .ad-slot {
+        margin-left: 0;
+        margin-right: 0;
+    }
+}
+
+@media (max-width: 1279px) {
+    #homepageMain {
+        order: 1;
+    }
+
+    .homepage-ad-left {
+        order: 2;
+    }
+
+    .homepage-ad-right {
+        order: 3;
+    }
+
+    .homepage-ad-left,
+    .homepage-ad-right {
+        margin-top: 1rem;
+    }
+}
+
 @media (max-width: 519px) {
     .ad-slot {
         margin-top: 0.75rem;

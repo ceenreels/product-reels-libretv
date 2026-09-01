@@ -121,8 +121,28 @@ test('sitemap includes current deployment date and key public pages', () => {
   assert.match(sitemapXml, /<loc>https:\/\/jumeitianxia\.com\/watch\.html<\/loc>/);
 });
 
-test('homepage JuicyAds banner appears before recommendation cards for better viewability', () => {
-  assert.ok(indexHtml.indexOf('id="ad-juicy-home-banner"') < indexHtml.indexOf('id="recommendationResults"'));
+test('homepage ad slots live in the side rails instead of the recommendation content', () => {
+  const recommendationStart = indexHtml.indexOf('<section id="recommendationArea"');
+  const recommendationEnd = indexHtml.indexOf('</section>', recommendationStart);
+  assert.ok(recommendationStart > 0);
+  assert.ok(recommendationEnd > recommendationStart);
+  for (const slotId of ['ad-square-banner', 'ad-native-banner', 'ad-responsive-banner', 'ad-juicy-home-banner']) {
+    const slotIndex = indexHtml.indexOf(`id="${slotId}"`);
+    assert.ok(slotIndex < recommendationStart || slotIndex > recommendationEnd);
+  }
+});
+
+test('desktop homepage places banner and square ads in side rails around the search area', () => {
+  const layoutStart = indexHtml.indexOf('id="homepageSearchLayout"');
+  const searchStart = indexHtml.indexOf('id="searchArea"');
+  assert.ok(layoutStart >= 0);
+  assert.ok(searchStart > layoutStart);
+  assert.ok(indexHtml.indexOf('id="homepageLeftAd"') > layoutStart);
+  assert.ok(indexHtml.indexOf('id="homepageRightAd"') > layoutStart);
+  assert.ok(indexHtml.indexOf('id="ad-square-banner"') > layoutStart);
+  assert.ok(indexHtml.indexOf('id="ad-responsive-banner"') > layoutStart);
+  assert.match(stylesCss, /\.homepage-search-layout\s*\{/);
+  assert.match(stylesCss, /@media\s*\(min-width:\s*1280px\)/);
 });
 
 test('JuicyAds responsive slots reserve the rendered ad height instead of a shared 250px height', () => {
