@@ -21,6 +21,9 @@
     </style>
 </head>
 <body>
+    <!-- 与默认播放页一致：JuicyAds PopUnder 的服务型广告锚点。 -->
+    <div id="ad-popunder" class="ad-service-slot" aria-hidden="true"></div>
+
     <main class="streamtape-shell">
         <header class="streamtape-header">
             <h1 id="streamtapeTitle" class="streamtape-title">正在加载视频…</h1>
@@ -38,7 +41,15 @@
             <div id="streamtapeMessage" class="streamtape-message">正在加载视频…</div>
         </div>
         <p class="streamtape-note">视频由 Streamtape 官方播放器提供。</p>
+
+        <!-- 与默认播放页一致：播放器下方广告位由统一广告入口挂载。 -->
+        <div id="ad-responsive-banner" class="ad-slot ad-responsive-banner" data-i18n-aria-label="ad" aria-label="广告"></div>
+        <div id="ad-square-banner" class="ad-slot ad-square-banner" data-i18n-aria-label="ad" aria-label="广告"></div>
+        <div id="ad-juicy-player-banner" class="ad-slot ad-juicy-responsive-banner" data-i18n-aria-label="juicyAd" aria-label="JuicyAds 广告"></div>
     </main>
+
+    <!-- Adsterra Social Bar 的服务型广告锚点。 -->
+    <div id="ad-social-bar" class="ad-service-slot" aria-hidden="true"></div>
 
     <script src="js/suggest.js"></script>
     <script>
@@ -70,5 +81,6 @@
             });
         });
     </script>
+    <script type="module" src="js/ads.js"></script>
 </body>
 </html>
