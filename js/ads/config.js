@@ -5,7 +5,21 @@ const homepageInlineEligibility = ({ document, viewportWidth }) => (
 export const ADS_CONFIG = {
     providers: {
         adsterra: {
-            enabled: true
+            enabled: true,
+            banners: {
+                verticalShort: {
+                    width: 160,
+                    height: 300,
+                    key: 'd41de280b2c7a451ee5055ecf4c0d6d3',
+                    src: 'https://closurenosy.com/d41de280b2c7a451ee5055ecf4c0d6d3/invoke.js'
+                },
+                verticalTall: {
+                    width: 160,
+                    height: 600,
+                    key: '064a6829425f6573ef717b4dad0f16f1',
+                    src: 'https://closurenosy.com/064a6829425f6573ef717b4dad0f16f1/invoke.js'
+                }
+            }
         },
         juicyads: {
             enabled: true,

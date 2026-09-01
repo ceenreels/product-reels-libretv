@@ -390,3 +390,20 @@ test('homepage inline slots are eligible only when desktop rails are hidden', ()
     assert.equal(eligible({ document: playerDocument, viewportWidth: 1920 }), true);
   }
 });
+
+test('Adsterra production config includes the supplied 160x300 rail code', () => {
+  assert.deepEqual(ADS_CONFIG.providers.adsterra.banners.verticalShort, {
+    width: 160,
+    height: 300,
+    key: 'd41de280b2c7a451ee5055ecf4c0d6d3',
+    src: 'https://closurenosy.com/d41de280b2c7a451ee5055ecf4c0d6d3/invoke.js'
+  });
+  assert.equal(ADS_CONFIG.slots['ad-home-right-rail'].format, 'verticalShort');
+  assert.deepEqual(ADS_CONFIG.providers.adsterra.banners.verticalTall, {
+    width: 160,
+    height: 600,
+    key: '064a6829425f6573ef717b4dad0f16f1',
+    src: 'https://closurenosy.com/064a6829425f6573ef717b4dad0f16f1/invoke.js'
+  });
+  assert.equal(ADS_CONFIG.slots['ad-home-left-rail'].format, 'verticalTall');
+});
