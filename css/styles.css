@@ -193,10 +193,9 @@ body {
     overflow: visible;
 }
 
-/* 首页 PC 端广告侧栏：中间保留搜索与推荐内容，两侧承载方形广告。 */
+/* 首页布局保持单列；桌面竖条广告脱离文档流，不参与中间内容宽度计算。 */
 .homepage-search-layout {
-    display: flex;
-    flex-direction: column;
+    display: block;
     min-width: 0;
 }
 
@@ -205,51 +204,70 @@ body {
     min-width: 0;
 }
 
-.homepage-ad-rail {
+.homepage-vertical-rail {
+    display: none;
+    position: fixed;
+    width: 160px;
+    min-width: 160px;
+    top: 50%;
+    transform: translateY(-50%);
+    z-index: 20;
+    pointer-events: none;
+}
+
+.homepage-vertical-rail .ad-slot {
+    width: 160px;
+    margin: 0;
+    pointer-events: auto;
+}
+
+.ad-home-vertical-rail {
+    min-height: 300px;
+}
+
+.ad-home-left-rail {
+    min-height: 600px;
+}
+
+.ad-home-right-rail {
+    min-height: 300px;
+}
+
+.homepage-mobile-ads {
+    display: block;
     width: 100%;
-    min-width: 0;
 }
 
-.homepage-ad-rail .ad-slot {
-    width: 100%;
-}
-
-@media (min-width: 1280px) {
-    .homepage-search-layout {
-        display: grid;
-        grid-template-columns: minmax(180px, 300px) minmax(0, 1fr) minmax(180px, 300px);
-        align-items: start;
-        column-gap: 1.5rem;
-    }
-
-    .homepage-ad-rail {
-        position: sticky;
-        top: 1rem;
-        padding-top: clamp(7rem, 15vh, 12rem);
-    }
-
-    .homepage-ad-rail .ad-slot {
-        margin-left: 0;
-        margin-right: 0;
-    }
-}
-
-@media (max-width: 1279px) {
-    #homepageMain {
-        order: 1;
-    }
-
+@media (min-width: 1664px) {
     .homepage-ad-left {
-        order: 2;
+        left: max(1rem, calc((100vw - 1536px) / 2 - 184px));
     }
 
     .homepage-ad-right {
-        order: 3;
+        right: max(1rem, calc((100vw - 1536px) / 2 - 184px));
     }
 
-    .homepage-ad-left,
-    .homepage-ad-right {
-        margin-top: 1rem;
+    .homepage-vertical-rail {
+        display: none;
+    }
+
+    html.homepage-left-vertical-ready #homepageLeftAd,
+    html.homepage-right-vertical-ready #homepageRightAd {
+        display: block;
+    }
+
+    html.homepage-vertical-ads-ready .homepage-mobile-ads {
+        display: none;
+    }
+}
+
+@media (max-width: 1663px) {
+    .homepage-vertical-rail {
+        display: none;
+    }
+
+    .homepage-mobile-ads {
+        display: block;
     }
 }
 

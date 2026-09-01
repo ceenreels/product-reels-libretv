@@ -1,3 +1,7 @@
+const homepageInlineEligibility = ({ document, viewportWidth }) => (
+    !document?.getElementById?.('homepageMobileAds') || viewportWidth < 1664
+);
+
 export const ADS_CONFIG = {
     providers: {
         adsterra: {
@@ -27,19 +31,33 @@ export const ADS_CONFIG = {
         }
     },
     slots: {
+        'ad-home-left-rail': {
+            provider: 'adsterra',
+            elementId: 'ad-home-left-rail',
+            format: 'verticalTall',
+            minViewport: 1664
+        },
+        'ad-home-right-rail': {
+            provider: 'adsterra',
+            elementId: 'ad-home-right-rail',
+            format: 'verticalShort',
+            minViewport: 1664
+        },
         'ad-responsive-banner': {
             provider: 'adsterra',
             elementId: 'ad-responsive-banner',
             desktopFormat: 'square',
-            desktopBreakpoint: 1280
+            desktopBreakpoint: 1280,
+            eligible: homepageInlineEligibility
         },
-        'ad-native-banner': { provider: 'adsterra', elementId: 'ad-native-banner' },
-        'ad-square-banner': { provider: 'adsterra', elementId: 'ad-square-banner' },
+        'ad-native-banner': { provider: 'adsterra', elementId: 'ad-native-banner', eligible: homepageInlineEligibility },
+        'ad-square-banner': { provider: 'adsterra', elementId: 'ad-square-banner', eligible: homepageInlineEligibility },
         'ad-juicy-home-banner': {
             provider: 'juicyads',
             elementId: 'ad-juicy-home-banner',
             desktopVariant: 'sidebar',
-            desktopBreakpoint: 1280
+            desktopBreakpoint: 1280,
+            eligible: homepageInlineEligibility
         },
         'ad-juicy-player-banner': { provider: 'juicyads', elementId: 'ad-juicy-player-banner' },
         'ad-popunder-juicyads': { provider: 'juicyads', elementId: 'ad-popunder' }

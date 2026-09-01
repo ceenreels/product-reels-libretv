@@ -31,6 +31,20 @@ const DEFAULT_ADSTERRA_CONFIG = {
             height: 250,
             key: '96f20abe4e9e5d2c41ea6e4302114ad2',
             src: 'https://closurenosy.com/96f20abe4e9e5d2c41ea6e4302114ad2/invoke.js'
+        },
+        // The 160px rail slots are created in Adsterra, but their generated
+        // snippets must be copied into this config before they can load.
+        verticalTall: {
+            width: 160,
+            height: 600,
+            key: null,
+            src: null
+        },
+        verticalShort: {
+            width: 160,
+            height: 300,
+            key: null,
+            src: null
         }
     }
 };
@@ -59,7 +73,7 @@ function appendScript(container, documentRef, src, key, attributes = {}) {
 }
 
 function loadBanner(container, documentRef, ad, key) {
-    if (!container || !ad) return Promise.resolve(false);
+    if (!container || !ad?.src || !ad?.key) return Promise.resolve(false);
     if (container.querySelector?.(`script[data-libretv-ad="${key}"]`)) return Promise.resolve(false);
 
     const win = documentRef?.defaultView || globalThis;
@@ -90,6 +104,10 @@ function loadBanner(container, documentRef, ad, key) {
 }
 
 function configuredBanner(settings, viewportWidth, slotConfig = {}) {
+    if (slotConfig.format && settings.banners[slotConfig.format]) {
+        return settings.banners[slotConfig.format];
+    }
+
     const desktopBreakpoint = Number.isFinite(slotConfig.desktopBreakpoint)
         ? slotConfig.desktopBreakpoint
         : 1280;
@@ -142,11 +160,18 @@ export function createAdsterraProvider(config = {}) {
                     'data-cfasync': 'false'
                 });
             } else {
-                const selected = slotName === 'ad-square-banner'
-                    ? settings.banners.square
-                    : configuredBanner(settings, (doc.defaultView || globalThis).innerWidth || 0, context.config || {});
+                const viewportWidth = (doc.defaultView || globalThis).innerWidth || 0;
+                let selected;
+                if (context.config?.format) {
+                    selected = configuredBanner(settings, viewportWidth, context.config);
+                } else if (slotName === 'ad-square-banner') {
+                    selected = settings.banners.square;
+                } else {
+                    selected = configuredBanner(settings, viewportWidth, context.config || {});
+                }
                 bannerQueue = bannerQueue.then(() => loadBanner(element, doc, selected, `adsterra-${slotName}`));
-                await bannerQueue;
+                const loaded = await bannerQueue;
+                if (loaded && element.dataset) element.dataset.libretvAdLoaded = 'true';
             }
             if (element.dataset) element.dataset.libretvAdProvider = 'adsterra';
         },

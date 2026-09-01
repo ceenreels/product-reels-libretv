@@ -121,28 +121,31 @@ test('sitemap includes current deployment date and key public pages', () => {
   assert.match(sitemapXml, /<loc>https:\/\/jumeitianxia\.com\/watch\.html<\/loc>/);
 });
 
-test('homepage ad slots live in the side rails instead of the recommendation content', () => {
-  const recommendationStart = indexHtml.indexOf('<section id="recommendationArea"');
-  const recommendationEnd = indexHtml.indexOf('</section>', recommendationStart);
-  assert.ok(recommendationStart > 0);
-  assert.ok(recommendationEnd > recommendationStart);
-  for (const slotId of ['ad-square-banner', 'ad-native-banner', 'ad-responsive-banner', 'ad-juicy-home-banner']) {
-    const slotIndex = indexHtml.indexOf(`id="${slotId}"`);
-    assert.ok(slotIndex < recommendationStart || slotIndex > recommendationEnd);
-  }
+test('homepage uses fixed vertical rails without shrinking the central content', () => {
+  assert.match(indexHtml, /id="homepageLeftAd"[^>]*class="[^"]*homepage-vertical-rail/);
+  assert.match(indexHtml, /id="homepageRightAd"[^>]*class="[^"]*homepage-vertical-rail/);
+  assert.match(indexHtml, /id="ad-home-left-rail"/);
+  assert.match(indexHtml, /id="ad-home-right-rail"/);
+  assert.match(stylesCss, /\.homepage-search-layout\s*\{[^}]*display:\s*block/);
+  assert.match(stylesCss, /\.homepage-vertical-rail\s*\{[^}]*position:\s*fixed/);
+  assert.match(stylesCss, /\.homepage-vertical-rail\s*\{[^}]*width:\s*160px/);
+  assert.match(stylesCss, /@media\s*\(min-width:\s*1664px\)/);
+  assert.match(stylesCss, /@media\s*\(max-width:\s*1663px\)[\s\S]*homepage-vertical-rail[\s\S]*display:\s*none/);
+  assert.doesNotMatch(indexHtml, /grid-template-columns:[^;]*homepage/);
 });
 
-test('desktop homepage places banner and square ads in side rails around the search area', () => {
-  const layoutStart = indexHtml.indexOf('id="homepageSearchLayout"');
-  const searchStart = indexHtml.indexOf('id="searchArea"');
-  assert.ok(layoutStart >= 0);
-  assert.ok(searchStart > layoutStart);
-  assert.ok(indexHtml.indexOf('id="homepageLeftAd"') > layoutStart);
-  assert.ok(indexHtml.indexOf('id="homepageRightAd"') > layoutStart);
-  assert.ok(indexHtml.indexOf('id="ad-square-banner"') > layoutStart);
-  assert.ok(indexHtml.indexOf('id="ad-responsive-banner"') > layoutStart);
-  assert.match(stylesCss, /\.homepage-search-layout\s*\{/);
-  assert.match(stylesCss, /@media\s*\(min-width:\s*1280px\)/);
+test('homepage keeps inline ad fallbacks out of the desktop flow', () => {
+  const recommendationStart = indexHtml.indexOf('<section id="recommendationArea"');
+  const recommendationEnd = indexHtml.indexOf('</section>', recommendationStart);
+  const mobileAdsStart = indexHtml.indexOf('id="homepageMobileAds"');
+  assert.ok(recommendationStart > 0);
+  assert.ok(recommendationEnd > recommendationStart);
+  assert.ok(mobileAdsStart > recommendationEnd);
+  assert.match(indexHtml, /id="ad-responsive-banner"/);
+  assert.match(indexHtml, /id="ad-square-banner"/);
+  assert.match(indexHtml, /id="ad-native-banner"/);
+  assert.match(indexHtml, /id="ad-juicy-home-banner"/);
+  assert.match(stylesCss, /html\.homepage-vertical-ads-ready\s+\.homepage-mobile-ads[\s\S]*display:\s*none/);
 });
 
 test('JuicyAds responsive slots reserve the rendered ad height instead of a shared 250px height', () => {

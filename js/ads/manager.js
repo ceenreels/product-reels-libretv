@@ -7,6 +7,21 @@ export function createAdManager({ document: documentRef = globalThis.document, p
     const activeProviders = new Map();
     const mountedSlots = new Set();
 
+    function isSlotEligible(slotConfig, element) {
+        const viewportWidth = Number((documentRef?.defaultView || globalThis).innerWidth) || 0;
+        if (Number.isFinite(slotConfig.minViewport) && viewportWidth < slotConfig.minViewport) return false;
+        if (Number.isFinite(slotConfig.maxViewport) && viewportWidth > slotConfig.maxViewport) return false;
+        if (typeof slotConfig.eligible === 'function') {
+            try {
+                return slotConfig.eligible({ document: documentRef, element, viewportWidth });
+            } catch (error) {
+                logger?.warn?.(`[ads] slot eligibility check failed`, error);
+                return false;
+            }
+        }
+        return true;
+    }
+
     async function init() {
         await Promise.all(Object.entries(providers).map(async ([name, provider]) => {
             if (!provider || provider.enabled === false) return;
@@ -28,7 +43,7 @@ export function createAdManager({ document: documentRef = globalThis.document, p
         const provider = activeProviders.get(slotConfig.provider);
         const elementId = slotConfig.elementId || slotName;
         const element = documentRef?.getElementById?.(elementId);
-        if (!provider || !element) return false;
+        if (!provider || !element || !isSlotEligible(slotConfig, element)) return false;
 
         try {
             await provider.mount?.(slotName, element, {

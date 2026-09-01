@@ -37,6 +37,53 @@ test('provider errors are isolated and a slot is mounted once', async () => {
   assert.deepEqual(calls, ['init-good', ['mount', 'slot', element]]);
 });
 
+test('ad manager skips slots outside their viewport eligibility', async () => {
+  const calls = [];
+  const element = { dataset: {}, appendChild() {} };
+  const manager = createAdManager({
+    document: {
+      defaultView: { innerWidth: 1200 },
+      getElementById: id => id === 'rail' ? element : null
+    },
+    providers: {
+      provider: {
+        enabled: true,
+        init() {},
+        mount(slot) { calls.push(slot); }
+      }
+    },
+    slots: {
+      rail: { provider: 'provider', minViewport: 1664 }
+    }
+  });
+  await manager.init();
+  assert.equal(await manager.mount('rail'), false);
+  assert.deepEqual(calls, []);
+});
+
+test('ad manager supports element-aware eligibility callbacks', async () => {
+  const calls = [];
+  const element = { dataset: {}, appendChild() {} };
+  const manager = createAdManager({
+    document: {
+      defaultView: { innerWidth: 1920 },
+      getElementById: id => id === 'slot' ? element : null
+    },
+    providers: {
+      provider: { enabled: true, init() {}, mount(slot) { calls.push(slot); } }
+    },
+    slots: {
+      slot: {
+        provider: 'provider',
+        eligible: ({ element: candidate }) => candidate === element && false
+      }
+    }
+  });
+  await manager.init();
+  assert.equal(await manager.mount('slot'), false);
+  assert.deepEqual(calls, []);
+});
+
 test('Adsterra chooses a mobile banner for a narrow viewport', () => {
   assert.deepEqual(getResponsiveBanner(390), { width: 320, height: 50 });
   assert.deepEqual(getResponsiveBanner(1280), { width: 728, height: 90 });
@@ -76,6 +123,49 @@ test('Adsterra uses a square creative for a desktop sidebar slot', async () => {
     width: 300,
     params: {}
   });
+});
+
+test('Adsterra selects fixed vertical creatives for homepage side rails', async () => {
+  const options = [];
+  const documentRef = {
+    defaultView: { innerWidth: 1920 },
+    head: { appendChild() {} },
+    body: { appendChild() {} },
+    createElement: tag => {
+      const node = { tagName: tag.toUpperCase(), dataset: {}, setAttribute() {} };
+      Object.defineProperty(node, 'onload', {
+        configurable: true,
+        set(handler) { this._onload = handler; handler?.(); },
+        get() { return this._onload; }
+      });
+      return node;
+    }
+  };
+  const provider = createAdsterraProvider({
+    enabled: true,
+    banners: {
+      verticalTall: { width: 160, height: 600, key: 'tall-key', src: 'https://ads.example/tall.js' },
+      verticalShort: { width: 160, height: 300, key: 'short-key', src: 'https://ads.example/short.js' }
+    }
+  });
+  await provider.init({ document: documentRef });
+  for (const [slotName, format, expected] of [
+    ['ad-home-left-rail', 'verticalTall', { width: 160, height: 600 }],
+    ['ad-home-right-rail', 'verticalShort', { width: 160, height: 300 }]
+  ]) {
+    const slot = { dataset: {}, querySelector() { return null; }, appendChild() {} };
+    await provider.mount(slotName, slot, { document: documentRef, config: { format } });
+    options.push(documentRef.defaultView.atOptions);
+    assert.equal(slot.dataset.libretvAdLoaded, 'true');
+    assert.deepEqual(documentRef.defaultView.atOptions, {
+      key: `${format === 'verticalTall' ? 'tall' : 'short'}-key`,
+      format: 'iframe',
+      height: expected.height,
+      width: expected.width,
+      params: {}
+    });
+  }
+  assert.equal(options.length, 2);
 });
 
 test('JuicyAds uses a desktop sidebar snippet variant when configured', async () => {
@@ -287,4 +377,16 @@ test('homepage JuicyAds sidebar variant uses the 300x250 creative on desktop', (
   assert.match(sidebarSnippet, /data-width="300"/);
   assert.match(sidebarSnippet, /data-height="250"/);
   assert.equal(ADS_CONFIG.slots['ad-juicy-home-banner'].desktopVariant, 'sidebar');
+});
+
+test('homepage inline slots are eligible only when desktop rails are hidden', () => {
+  const homepageDocument = { getElementById: id => id === 'homepageMobileAds' ? {} : null };
+  const playerDocument = { getElementById: () => null };
+  for (const slotName of ['ad-responsive-banner', 'ad-square-banner', 'ad-native-banner', 'ad-juicy-home-banner']) {
+    const eligible = ADS_CONFIG.slots[slotName].eligible;
+    assert.equal(typeof eligible, 'function');
+    assert.equal(eligible({ document: homepageDocument, viewportWidth: 1920 }), false);
+    assert.equal(eligible({ document: homepageDocument, viewportWidth: 1280 }), true);
+    assert.equal(eligible({ document: playerDocument, viewportWidth: 1920 }), true);
+  }
 });

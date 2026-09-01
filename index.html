@@ -123,9 +123,8 @@
 
     <div class="container mx-auto px-4 py-8 flex flex-col h-screen">
         <div id="homepageSearchLayout" class="homepage-search-layout flex-1">
-            <aside id="homepageLeftAd" class="homepage-ad-rail homepage-ad-left" data-i18n-aria-label="ad" aria-label="左侧广告位">
-                <div id="ad-square-banner" class="ad-slot ad-square-banner" data-i18n-aria-label="ad" aria-label="广告"></div>
-                <div id="ad-native-banner" class="ad-slot ad-native-banner" data-i18n-aria-label="nativeAd" aria-label="原生广告"></div>
+            <aside id="homepageLeftAd" class="homepage-vertical-rail homepage-ad-left" data-i18n-aria-label="ad" aria-label="左侧广告位">
+                <div id="ad-home-left-rail" class="ad-slot ad-home-vertical-rail ad-home-left-rail" data-i18n-aria-label="ad" aria-label="左侧竖条广告"></div>
             </aside>
 
             <div id="homepageMain" class="flex-1 flex flex-col">
@@ -189,17 +188,24 @@
             </section>
             
             <!-- 搜索结果：初始隐藏 -->
-            <div id="resultsArea" class="w-full hidden">
+            <div id="resultsArea" class="w-full max-w-7xl mx-auto hidden">
                 <div id="results" class="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-4 gap-6">
                 </div>
             </div>
         </div>
 
-            <aside id="homepageRightAd" class="homepage-ad-rail homepage-ad-right" data-i18n-aria-label="ad" aria-label="右侧广告位">
-                <!-- PC 端使用 300x250 方形创意；窄屏由广告适配器切换为响应式横幅。 -->
-                <div id="ad-responsive-banner" class="ad-slot ad-responsive-banner" data-i18n-aria-label="ad" aria-label="广告"></div>
-                <div id="ad-juicy-home-banner" class="ad-slot ad-juicy-responsive-banner" data-i18n-aria-label="juicyAd" aria-label="JuicyAds 广告"></div>
+            <aside id="homepageRightAd" class="homepage-vertical-rail homepage-ad-right" data-i18n-aria-label="ad" aria-label="右侧广告位">
+                <div id="ad-home-right-rail" class="ad-slot ad-home-vertical-rail ad-home-right-rail" data-i18n-aria-label="ad" aria-label="右侧竖条广告"></div>
             </aside>
+        </div>
+
+        <!-- 竖条广告仅在足够宽的桌面显示；其他视口使用页内广告兜底。 -->
+        <div id="homepageMobileAds" class="homepage-mobile-ads" aria-label="页内广告">
+            <div id="ad-responsive-banner" class="ad-slot ad-responsive-banner" data-i18n-aria-label="ad" aria-label="广告"></div>
+            <div id="ad-square-banner" class="ad-slot ad-square-banner" data-i18n-aria-label="ad" aria-label="广告"></div>
+            <div id="ad-native-banner" class="ad-slot ad-native-banner" data-i18n-aria-label="nativeAd" aria-label="原生广告"></div>
+            <div id="ad-juicy-home-banner" class="ad-slot ad-juicy-responsive-banner" data-i18n-aria-label="juicyAd" aria-label="JuicyAds 广告"></div>
+        </div>
     </div>
 
     <!-- 页脚区域 -->
