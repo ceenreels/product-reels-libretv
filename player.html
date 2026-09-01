@@ -253,6 +253,7 @@
     <script src="js/config.js"></script>
     <script src="js/i18n/messages.js"></script>
     <script src="js/i18n/index.js"></script>
+    <script src="js/player-utils.js"></script>
     <script>
       document.addEventListener('DOMContentLoaded',()=>{const i=globalThis.LibretvI18n,q=new URLSearchParams(location.search),persisted=localStorage.getItem('libretv:locale')||localStorage.getItem('locale')||localStorage.getItem('currentLocale'),locale=i.resolveLocale({storedLocale:persisted||q.get('locale')||q.get('lang'),browserLanguages:navigator.languages});window.playerLocale=locale;i.apply(document,locale);const s=document.getElementById('pageLocale');if(s){s.value=locale;s.addEventListener('change',()=>{localStorage.setItem('libretv:locale',s.value);const u=new URL(location.href);u.searchParams.set('locale',s.value);u.searchParams.delete('lang');location.assign(u.href)})}});
     </script>
@@ -443,6 +444,7 @@
                 showError(i18nText('parseVideoError', '视频链接解析失败，请尝试其他视频源'));
                 return;
             }
+            const playbackType = globalThis.LibretvPlayerUtils?.detectVideoType(playableVideoUrl) || 'auto';
 
             // 配置HLS.js选项
             const hlsConfig = {
@@ -486,7 +488,7 @@
                 volume: 0.7,
                 video: {
                     url: playableVideoUrl,
-                    type: 'hls',
+                    type: playbackType,
                     pic: '',
                     customType: {
                         hls: function(video, player) {
@@ -854,6 +856,7 @@
                 showError(i18nText('parseVideoError', '视频链接解析失败，请尝试其他视频源'));
                 return;
             }
+            const playbackType = globalThis.LibretvPlayerUtils?.detectVideoType(playableVideoUrl) || 'auto';
             
             // 更新URL，不刷新页面
             const newUrl = new URL(window.location.href);
@@ -866,7 +869,7 @@
                 try {
                     dp.switchVideo({
                         url: playableVideoUrl,
-                        type: 'hls'
+                        type: playbackType
                     });
                     
                     // 确保播放开始

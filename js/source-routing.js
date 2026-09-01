@@ -33,11 +33,15 @@
     return mode === 'region' ? ids.slice(0,1) : ids;
   }
   function getFallbackSources(opts) {
-    opts=opts||{}; var map=sourceMap(), capability=opts.capability || 'search', eligible=getEligibleSources({locale:opts.locale,region:opts.region,mode:'aggregated',now:opts.now,capability}), all=Object.keys(map).filter(function(id){var s=info(id,map[id],0); return s.enabled&&s.defaultEligible&&isSourceHealthy(id, opts.now)&&s.capabilities[capability]!==false;});
-    var same=all.filter(function(id){var s=info(id,map[id],0); return langMatch(s,opts.locale)&&regionMatch(s, opts.region)&&eligible.indexOf(id)<0;});
-    var global=all.filter(function(id){var s=info(id,map[id],0); return (s.regions||[]).some(function(r){return /^GLOBAL_/.test(r);})&&langMatch(s,opts.locale)&&eligible.indexOf(id)<0&&same.indexOf(id)<0;});
-    var finalGlobal = opts.locale === 'en' ? all.filter(function(id){var s=info(id,map[id],0); return (s.regions||[]).some(function(r){return /^GLOBAL_/.test(r);})&&eligible.indexOf(id)<0&&same.indexOf(id)<0&&global.indexOf(id)<0;}) : [];
-    return eligible.concat(same,global,finalGlobal);
+    opts=opts||{}; var map=sourceMap(), locale=opts.locale || 'zh-CN', capability=opts.capability || 'search', eligible=getEligibleSources({locale:locale,region:opts.region,mode:'aggregated',now:opts.now,capability}), all=Object.keys(map).filter(function(id){var s=info(id,map[id],0); return s.enabled&&s.defaultEligible&&isSourceHealthy(id, opts.now)&&s.capabilities[capability]!==false;});
+    var same=all.filter(function(id){var s=info(id,map[id],0); return langMatch(s,locale)&&regionMatch(s, opts.region)&&eligible.indexOf(id)<0;});
+    var global=all.filter(function(id){var s=info(id,map[id],0); return (s.regions||[]).some(function(r){return /^GLOBAL_/.test(r);})&&langMatch(s,locale)&&eligible.indexOf(id)<0&&same.indexOf(id)<0;});
+    // English is the explicit cross-language fallback. Keep it global and
+    // language-labelled so an English user never receives a Chinese source,
+    // while Chinese/other locales can still recover when no matching source
+    // is available.
+    var englishFallback = all.filter(function(id){var s=info(id,map[id],0); return langMatch(s,'en')&&(s.regions||[]).some(function(r){return r === 'GLOBAL_EN' || r === 'GLOBAL';})&&eligible.indexOf(id)<0&&same.indexOf(id)<0&&global.indexOf(id)<0;});
+    return eligible.concat(same,global,englishFallback);
   }
   function normalizeLocale(value) {
     if (root.LibretvI18n && typeof root.LibretvI18n.normalizeLocale === 'function') return root.LibretvI18n.normalizeLocale(value);

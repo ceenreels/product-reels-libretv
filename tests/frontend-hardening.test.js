@@ -75,6 +75,26 @@ test('search and recommendation code contains generation guards', () => {
   assert.match(appSource, /requestGeneration\s*!==\s*searchGeneration/);
 });
 
+test('search result cards do not interpolate video titles into inline JavaScript', () => {
+  assert.doesNotMatch(appSource, /onclick="showDetails\('\$\{safeId\}'/);
+  assert.match(appSource, /data-search-result-index/);
+  assert.match(appSource, /addEventListener\(['"]click['"]/);
+});
+
+test('search card escaping covers apostrophes, markup, and metadata hints', async () => {
+  const sandbox = await load(appSource);
+  assert.equal(sandbox.escapeHtml("NASA's <briefing> & more"), 'NASA&#39;s &lt;briefing&gt; &amp; more');
+  const params = new URLSearchParams();
+  sandbox.appendVideoMetadataParams(params, {
+    vod_name: "NASA's briefing",
+    vod_pic: 'https://images-assets.nasa.gov/briefing.jpg',
+    vod_content: 'Official briefing'
+  });
+  assert.equal(params.get('title'), "NASA's briefing");
+  assert.equal(params.get('cover'), 'https://images-assets.nasa.gov/briefing.jpg');
+  assert.equal(params.get('desc'), 'Official briefing');
+});
+
 test('invalidating an active search clears the stale loading overlay', async () => {
   let hidden = 0;
   const sandbox = await load(appSource, { hideLoading: () => { hidden += 1; } });
@@ -88,6 +108,17 @@ test('persisted source validation rejects prototype and disabled sources', async
   assert.equal(sandbox.hasUsableApiSource('__proto__'), false);
   assert.equal(sandbox.hasUsableApiSource('disabled'), false);
   assert.equal(sandbox.hasUsableApiSource('ffzy'), true);
+});
+
+test('legacy Chinese source does not override English default routing', async () => {
+  const sandbox = await load(appSource, {
+    API_SITES: {
+      ffzy: { enabled: true, languages: ['zh-CN'] },
+      blender: { enabled: true, languages: ['en'] }
+    }
+  });
+  assert.equal(sandbox.resolveInitialSourceMode({ storedMode: '', storedSource: 'ffzy', locale: 'en' }), 'region');
+  assert.equal(sandbox.resolveInitialSourceMode({ storedMode: 'manual', storedSource: 'ffzy', locale: 'en' }), 'manual');
 });
 
 test('stale recommendation response cannot overwrite newer route state', async () => {

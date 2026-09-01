@@ -56,6 +56,145 @@ function buildProxyUrl(targetUrl) {
     return `${PROXY_URL}${encodeURIComponent(targetUrl)}`;
 }
 
+function getSourceAdapter(source) {
+    const adapterName = API_SITES[source]?.adapter;
+    if (!adapterName) return null;
+    const adapters = globalThis.VIDEO_SOURCE_ADAPTERS || {};
+    return adapters[adapterName] || globalThis[`${adapterName[0].toUpperCase()}${adapterName.slice(1)}Adapter`] || null;
+}
+
+function isAdapterSource(source) {
+    return Boolean(isEnabledApiSource(source) && getSourceAdapter(source));
+}
+
+const ADAPTER_RECOMMENDATION_LIMIT = 12;
+
+async function fetchAdapterJson(targetUrl) {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), API_REQUEST_TIMEOUT);
+    try {
+        // Verified official adapters expose CORS headers and can be requested
+        // directly from GitHub Pages. Keeping these calls off the Jina Reader
+        // proxy avoids proxy latency and binary/JSON content rewriting.
+        // Keep direct browser requests CORS-simple. The CMS proxy path may use
+        // a User-Agent header, but browser adapters must not send forbidden or
+        // non-safelisted headers that would trigger an avoidable preflight.
+        const response = await fetch(targetUrl, {
+            headers: { Accept: 'application/json' },
+            signal: controller.signal
+        });
+        if (!response.ok) throw new Error(`外部视频源请求失败: ${response.status}`);
+        return await readApiResponse(response);
+    } finally {
+        clearTimeout(timeoutId);
+    }
+}
+
+function normalizeAdapterItems(adapter, payload, source) {
+    if (!adapter || typeof adapter.normalizeSearchResponse !== 'function') return [];
+    const normalized = adapter.normalizeSearchResponse(payload);
+    const values = Array.isArray(normalized) ? normalized : normalized?.list;
+    if (!Array.isArray(values)) return [];
+    return values.map(item => ({
+        ...item,
+        source_name: API_SITES[source].name,
+        source_code: source
+    }));
+}
+
+async function handleAdapterSearch(source, searchQuery, context) {
+    const adapter = getSourceAdapter(source);
+    if (!adapter || typeof adapter.buildSearchUrl !== 'function') throw new Error('外部视频源适配器不可用');
+    const targetUrl = adapter.buildSearchUrl(searchQuery, 1, AGGREGATED_SEARCH_CONFIG.maxResults);
+    const payload = await fetchAdapterJson(targetUrl);
+    const list = normalizeAdapterItems(adapter, payload, source);
+    markSourceSuccess(source);
+    return JSON.stringify({
+        code: 200,
+        list,
+        routing: { locale: context.locale, region: context.region, requestedSources: [source], usedSources: list.length ? [source] : [], fellBack: false }
+    });
+}
+
+async function handleAdapterRecommendations(source, page, context) {
+    const adapter = getSourceAdapter(source);
+    if (!adapter) throw new Error('外部视频源适配器不可用');
+    const buildUrl = adapter.buildRecommendationsUrl || adapter.buildSearchUrl;
+    if (typeof buildUrl !== 'function') throw new Error('外部视频源不支持推荐');
+    const targetUrl = adapter.buildRecommendationsUrl
+        ? adapter.buildRecommendationsUrl(page, ADAPTER_RECOMMENDATION_LIMIT)
+        : adapter.buildSearchUrl('', page, ADAPTER_RECOMMENDATION_LIMIT);
+    const payload = await fetchAdapterJson(targetUrl);
+    const list = normalizeAdapterItems(adapter, payload, source);
+    markSourceSuccess(source);
+    return { list, detailUrl: targetUrl };
+}
+
+function getAdapterMetadataHint(url) {
+    const hint = {};
+    const fields = [
+        ['title', 240], ['cover', 1000], ['desc', 1200],
+        ['type', 120], ['year', 20], ['area', 120], ['director', 240],
+        ['actor', 500], ['remarks', 240]
+    ];
+    fields.forEach(([name, limit]) => {
+        const value = String(url.searchParams.get(name) || '').trim();
+        if (value) hint[name] = value.slice(0, limit);
+    });
+    if (hint.cover && !/^https?:\/\//i.test(hint.cover)) delete hint.cover;
+    return hint;
+}
+
+async function handleAdapterDetail(source, id, context, metadataHint = {}) {
+    const adapter = getSourceAdapter(source);
+    if (!adapter || typeof adapter.buildDetailUrl !== 'function' || typeof adapter.normalizeDetailResponse !== 'function') {
+        throw new Error('外部视频源详情适配器不可用');
+    }
+    let detailUrl = adapter.buildDetailUrl(id);
+    let payload = await fetchAdapterJson(detailUrl);
+    const metadataPayload = payload;
+    if (typeof adapter.getCollectionUrl === 'function' && /\/search(?:\?|$)/i.test(detailUrl)) {
+        const collectionUrl = adapter.getCollectionUrl(payload);
+        if (collectionUrl) {
+            detailUrl = collectionUrl;
+            payload = await fetchAdapterJson(collectionUrl);
+        }
+    }
+    const normalized = adapter.normalizeDetailResponse(payload, id) || {};
+    const metadataItems = typeof adapter.normalizeSearchResponse === 'function'
+        ? adapter.normalizeSearchResponse(metadataPayload)
+        : [];
+    const normalizedMetadata = Array.isArray(normalized)
+        ? (metadataItems[0] || {})
+        : { ...(normalized || {}), ...(normalized?.videoInfo || {}) };
+    const adapterMetadata = typeof adapter.normalizeDetailMetadata === 'function'
+        ? (adapter.normalizeDetailMetadata(payload, id) || {})
+        : {};
+    const metadata = { ...adapterMetadata, ...metadataHint, ...normalizedMetadata };
+    const rawEpisodes = Array.isArray(normalized) ? normalized : normalized.episodes;
+    const episodes = Array.isArray(rawEpisodes) ? rawEpisodes.filter(url => /^https?:\/\//i.test(url)) : [];
+    markSourceSuccess(source);
+    return JSON.stringify({
+        code: 200,
+        episodes,
+        detailUrl,
+        routing: { locale: context.locale, region: context.region, requestedSources: [source], usedSources: [source], fellBack: false },
+        videoInfo: {
+            title: metadata.title || metadata.vod_name || id,
+            cover: metadata.cover || metadata.vod_pic || '',
+            desc: metadata.desc || metadata.vod_content || '',
+            type: metadata.type || metadata.type_name || '',
+            year: metadata.year || metadata.vod_year || '',
+            area: metadata.area || metadata.vod_area || '',
+            director: metadata.director || metadata.vod_director || '',
+            actor: metadata.actor || metadata.vod_actor || '',
+            remarks: metadata.remarks || metadata.vod_remarks || '',
+            source_name: API_SITES[source].name,
+            source_code: source
+        }
+    });
+}
+
 function hasOwnApiSource(source) {
     return Object.prototype.hasOwnProperty.call(API_SITES, source);
 }
@@ -185,6 +324,10 @@ async function handleApiRequest(url) {
             if (source !== 'custom' && source !== 'aggregated' && !isEnabledApiSource(source) && (hasExplicitSource || (context.sourceMode !== 'aggregated' && context.sourceMode !== 'region'))) {
                 throw new Error('无效或已禁用的API来源');
             }
+
+            if (source !== 'custom' && source !== 'aggregated' && context.sourceMode === 'manual' && isAdapterSource(source)) {
+                return await handleAdapterSearch(source, searchQuery, context);
+            }
             
             // 处理聚合搜索
             if (source === 'aggregated' || context.sourceMode === 'aggregated' || context.sourceMode === 'region') {
@@ -273,19 +416,25 @@ async function handleApiRequest(url) {
                 const candidate = sourceCandidates[i];
                 if (!isEnabledApiSource(candidate)) continue;
                 try {
-                    const detailUrl = `${API_SITES[candidate].api}${API_CONFIG.recommendations.path}${page}`;
-                    const controller = new AbortController();
-                    const timeoutId = setTimeout(() => controller.abort(), API_REQUEST_TIMEOUT);
-                    let response;
-                    try {
-                        response = await fetch(buildProxyUrl(detailUrl), { headers: API_CONFIG.search.headers, signal: controller.signal });
-                    } finally {
-                        clearTimeout(timeoutId);
+                    let payload;
+                    if (isAdapterSource(candidate)) {
+                        const result = await handleAdapterRecommendations(candidate, page, context);
+                        payload = { code: 200, list: result.list };
+                    } else {
+                        const detailUrl = `${API_SITES[candidate].api}${API_CONFIG.recommendations.path}${page}`;
+                        const controller = new AbortController();
+                        const timeoutId = setTimeout(() => controller.abort(), API_REQUEST_TIMEOUT);
+                        let response;
+                        try {
+                            response = await fetch(buildProxyUrl(detailUrl), { headers: API_CONFIG.search.headers, signal: controller.signal });
+                        } finally {
+                            clearTimeout(timeoutId);
+                        }
+                        if (!response.ok) throw new Error(`推荐请求失败: ${response.status}`);
+                        payload = await readApiResponse(response);
+                        if (!payload || !Array.isArray(payload.list)) throw new Error('推荐接口返回的数据格式无效');
+                        markSourceSuccess(candidate);
                     }
-                    if (!response.ok) throw new Error(`推荐请求失败: ${response.status}`);
-                    const payload = await readApiResponse(response);
-                    if (!payload || !Array.isArray(payload.list)) throw new Error('推荐接口返回的数据格式无效');
-                    markSourceSuccess(candidate);
                     if (!payload.list.length) { emptyData = payload; emptySource = candidate; emptyFellBack = routed && i >= plan.primary.length; continue; }
                     usedSources = [candidate];
                     routingUsedSources = usedSources.slice();
@@ -304,7 +453,9 @@ async function handleApiRequest(url) {
                 routingFellBack = fellBack;
             }
             if (!data) throw new Error('推荐内容加载失败');
-            await enrichRecommendationCovers(data.list.slice(0, 12), sourceCode);
+            if (!isAdapterSource(sourceCode)) {
+                await enrichRecommendationCovers(data.list.slice(0, 12), sourceCode);
+            }
             data.list.forEach(item => { item.source_name = API_SITES[sourceCode].name; item.source_code = sourceCode; });
             return JSON.stringify({ code: 200, list: data.list, routing: { locale: context.locale, region: context.region, requestedSources: sourceCandidates, usedSources, fellBack } });
         }
@@ -331,6 +482,10 @@ async function handleApiRequest(url) {
             
             if (sourceCode !== 'custom' && !isEnabledApiSource(sourceCode)) {
                 throw new Error('无效或已禁用的API来源');
+            }
+
+            if (sourceCode !== 'custom' && isAdapterSource(sourceCode)) {
+                return await handleAdapterDetail(sourceCode, id, context, getAdapterMetadataHint(url));
             }
 
             const detailUrl = customApi
@@ -588,6 +743,14 @@ async function handleAggregatedSearch(searchQuery, context) {
 
     const fetchSource = async source => {
         try {
+            if (isAdapterSource(source)) {
+                const adapter = getSourceAdapter(source);
+                const targetUrl = adapter.buildSearchUrl(searchQuery, 1, AGGREGATED_SEARCH_CONFIG.maxResults);
+                const payload = await fetchAdapterJson(targetUrl);
+                const results = normalizeAdapterItems(adapter, payload, source);
+                markSourceSuccess(source);
+                return results;
+            }
             const apiUrl = `${API_SITES[source].api}${API_CONFIG.search.path}${encodeURIComponent(searchQuery)}`;
             let timeoutId;
             const timeoutPromise = new Promise((_, reject) => { timeoutId = setTimeout(() => reject(new Error(`${source}源搜索超时`)), 8000); });
@@ -727,11 +890,26 @@ async function handleMultipleCustomSearch(searchQuery, customApiUrls) {
 // 拦截API请求
 (function() {
     const originalFetch = window.fetch;
+
+    function normalizeRequestUrl(input) {
+        const origin = window.location?.origin || globalThis.location?.origin || 'https://jumeitianxia.com';
+        try {
+            if (typeof input === 'string') return new URL(input, origin);
+            if (input instanceof URL) return new URL(input.href, origin);
+            if (input && typeof input.url === 'string') return new URL(input.url, origin);
+        } catch (_) {}
+        return null;
+    }
     
     window.fetch = async function(input, init) {
-        const requestUrl = typeof input === 'string' ? new URL(input, window.location.origin) : input.url;
+        const requestUrl = normalizeRequestUrl(input);
         
-        if (requestUrl.pathname.startsWith('/api/')) {
+        // Only intercept this site's own virtual API. Official adapters use
+        // cross-origin `/api/...` paths too (PeerTube), which must go to the
+        // provider rather than recurse into handleApiRequest().
+        const siteOrigin = window.location?.origin || globalThis.location?.origin || 'https://jumeitianxia.com';
+        const sameOrigin = requestUrl && requestUrl.origin === siteOrigin;
+        if (requestUrl && sameOrigin && requestUrl.pathname.startsWith('/api/')) {
             try {
                 const data = await handleApiRequest(requestUrl);
                 return new Response(data, {

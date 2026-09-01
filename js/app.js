@@ -37,6 +37,18 @@ function hasUsableApiSource(source) {
         && API_SITES[source].enabled !== false;
 }
 
+function sourceMatchesLocale(source, locale) {
+    const languages = API_SITES?.[source]?.languages;
+    if (!Array.isArray(languages) || !languages.length) return false;
+    const prefix = String(locale || '').toLowerCase().slice(0, 2);
+    return languages.some(language => String(language).toLowerCase().slice(0, 2) === prefix);
+}
+
+function resolveInitialSourceMode({ storedMode = '', storedSource = '', locale = '' } = {}) {
+    if (['manual', 'aggregated', 'region', 'custom'].includes(storedMode)) return storedMode;
+    return hasUsableApiSource(storedSource) && sourceMatchesLocale(storedSource, locale) ? 'manual' : 'region';
+}
+
 function parseCustomApiUrls() {
     if (!customApiUrl) return [];
     return customApiUrl.split(CUSTOM_API_CONFIG.separator)
@@ -90,7 +102,7 @@ document.addEventListener('DOMContentLoaded', function() {
     if (!hasPersistedLocale && typeof LibretvI18n !== 'undefined') currentLocale = getUrlLocaleHint(location.search) || currentLocale;
     currentLocale = (typeof LibretvI18n !== 'undefined' ? LibretvI18n.resolveLocale({storedLocale: currentLocale, browserLanguages: navigator.languages}) : (currentLocale || 'zh-CN'));
     currentRegion = (typeof LibretvI18n !== 'undefined' ? LibretvI18n.resolveRegion({storedRegion: currentRegion, locale: currentLocale, browserLanguages: navigator.languages}) : (currentRegion || 'GLOBAL_ZH'));
-    if (!sourceMode) sourceMode = (storedApiSource && hasUsableApiSource(storedApiSource)) ? 'manual' : 'region';
+    sourceMode = resolveInitialSourceMode({ storedMode: sourceMode, storedSource: storedApiSource, locale: currentLocale });
     if (sourceMode === 'region' || sourceMode === 'aggregated' || sourceMode === 'custom') currentApiSource = sourceMode;
     if (sourceMode === 'manual' && !hasUsableApiSource(currentApiSource)) currentApiSource = DEFAULT_API_SOURCE;
     localStorage.setItem('libretv:locale', currentLocale); localStorage.setItem('libretv:region', currentRegion); localStorage.setItem('libretv:sourceMode', sourceMode);
@@ -302,7 +314,7 @@ function renderRecommendations(items, options = {}) {
         button.type = 'button';
         button.className = 'block w-full text-left';
         button.addEventListener('click', () => {
-            showDetails(String(item.vod_id || ''), item.vod_name || localizedText('unknownVideo', 'Unknown video'), item.source_code || legacySource);
+            showDetails(String(item.vod_id || ''), item.vod_name || localizedText('unknownVideo', 'Unknown video'), item.source_code || legacySource, item);
         });
 
         const cover = document.createElement('div');
@@ -366,6 +378,90 @@ function createRecommendationFallbackCover(title) {
         <text x="200" y="330" fill="#fff" font-family="sans-serif" font-size="28" text-anchor="middle">${label}</text>
     </svg>`;
     return `data:image/svg+xml;charset=UTF-8,${encodeURIComponent(svg)}`;
+}
+
+function escapeHtml(value) {
+    return String(value ?? '').replace(/[&<>"']/g, character => ({
+        '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
+    })[character]);
+}
+
+function isSafeHttpUrl(value) {
+    if (typeof value !== 'string' || !value.trim()) return false;
+    try {
+        const parsed = new URL(value.trim(), globalThis.location?.href || 'https://jumeitianxia.com/');
+        return parsed.protocol === 'http:' || parsed.protocol === 'https:';
+    } catch (_) {
+        return false;
+    }
+}
+
+function escapeInlineJsArgument(value) {
+    return escapeHtml(JSON.stringify(String(value ?? '')));
+}
+
+function renderSearchResultCards(results, resultsDiv) {
+    resultsDiv.innerHTML = results.map((item, index) => {
+        const safeName = escapeHtml(item.vod_name || localizedText('unknownVideo', 'Unknown video'));
+        const sourceInfo = item.source_name
+            ? `<span class="bg-[#222] text-xs px-2 py-1 rounded-full">${escapeHtml(item.source_name)}</span>`
+            : '';
+        const hasCover = isSafeHttpUrl(item.vod_pic);
+        const coverUrl = hasCover ? escapeHtml(item.vod_pic.trim()) : '';
+        const typeName = escapeHtml(item.type_name || '');
+        const year = escapeHtml(item.vod_year || '');
+        const remarks = escapeHtml(item.vod_remarks || localizedText('noDescription', 'No description'));
+
+        return `
+            <div class="card-hover bg-[#111] rounded-lg overflow-hidden cursor-pointer transition-all hover:scale-[1.02] h-full" data-search-result-index="${index}" role="button" tabindex="0">
+                <div class="md:flex">
+                    ${hasCover ? `
+                    <div class="md:w-1/4 relative overflow-hidden">
+                        <div class="w-full h-40 md:h-full">
+                            <img src="${coverUrl}" alt="${safeName}" class="w-full h-full object-cover transition-transform hover:scale-110" loading="lazy" referrerpolicy="no-referrer">
+                            <div class="absolute inset-0 bg-gradient-to-t from-[#111] to-transparent opacity-60"></div>
+                        </div>
+                    </div>` : ''}
+                    <div class="p-3 flex flex-col flex-grow ${hasCover ? 'md:w-3/4' : 'w-full'}">
+                        <div class="flex-grow">
+                            <h3 class="text-lg font-semibold mb-2 line-clamp-2">${safeName}</h3>
+                            <div class="flex flex-wrap gap-1 mb-2">
+                                ${typeName ? `<span class="text-xs py-0.5 px-1.5 rounded bg-opacity-20 bg-blue-500 text-blue-300">${typeName}</span>` : ''}
+                                ${year ? `<span class="text-xs py-0.5 px-1.5 rounded bg-opacity-20 bg-purple-500 text-purple-300">${year}</span>` : ''}
+                            </div>
+                            <p class="text-gray-400 text-xs line-clamp-2">${remarks}</p>
+                        </div>
+                        <div class="flex justify-between items-center mt-2 pt-2 border-t border-gray-800">
+                            ${sourceInfo ? `<div>${sourceInfo}</div>` : '<div></div>'}
+                            <div><span class="text-xs text-gray-500 flex items-center">
+                                <svg xmlns="http://www.w3.org/2000/svg" class="h-3 w-3 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z" />
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                </svg>${localizedText('clickToPlay', 'Play')}</span></div>
+                        </div>
+                    </div>
+                </div>
+            </div>`;
+    }).join('');
+
+    resultsDiv.querySelectorAll('[data-search-result-index]').forEach(card => {
+        const index = Number(card.getAttribute('data-search-result-index'));
+        const item = Number.isInteger(index) ? results[index] : null;
+        if (!item) return;
+        const activate = () => showDetails(
+            String(item.vod_id || ''),
+            item.vod_name || localizedText('unknownVideo', 'Unknown video'),
+            item.source_code || currentApiSource,
+            item
+        );
+        card.addEventListener('click', activate);
+        card.addEventListener('keydown', event => {
+            if (event.key === 'Enter' || event.key === ' ') {
+                event.preventDefault();
+                activate();
+            }
+        });
+    });
 }
 
 // 带有超时和缓存的站点可用性测试
@@ -504,7 +600,20 @@ async function testCustomApiUrl(url) {
 
 // 设置事件监听器
 function setupEventListeners() {
-    document.getElementById('localeSelect')?.addEventListener('change', e => { invalidateSearchRequests(); currentLocale=e.target.value; localStorage.setItem('libretv:locale',currentLocale); LibretvI18n?.apply(document,currentLocale); populateApiSourceOptions(); updateMetadata(); updateRouteStatus(); resetSearchArea(); recommendationPage=1; loadRecommendations(); });
+    document.getElementById('localeSelect')?.addEventListener('change', e => {
+        invalidateSearchRequests();
+        currentLocale = e.target.value;
+        localStorage.setItem('libretv:locale', currentLocale);
+        localStorage.setItem('libretv:sourceMode', sourceMode);
+        localStorage.setItem('currentApiSource', currentApiSource);
+        LibretvI18n?.apply(document, currentLocale);
+        populateApiSourceOptions();
+        updateMetadata();
+        updateRouteStatus();
+        resetSearchArea();
+        recommendationPage = 1;
+        loadRecommendations();
+    });
     document.getElementById('regionSelect')?.addEventListener('change', e => { invalidateSearchRequests(); currentRegion=e.target.value; localStorage.setItem('libretv:region',currentRegion); updateRouteStatus(); resetSearchArea(); recommendationPage=1; loadRecommendations(); });
     document.getElementById('sourceModeSelect')?.addEventListener('change', e => {
         invalidateSearchRequests(); sourceMode = e.target.value;
@@ -729,80 +838,7 @@ async function search() {
             return;
         }
 
-        // 添加XSS保护，使用textContent和属性转义
-        resultsDiv.innerHTML = results.map(item => {
-            const safeId = item.vod_id ? item.vod_id.toString().replace(/[^\w-]/g, '') : '';
-            const safeName = (item.vod_name || '').toString()
-                .replace(/</g, '&lt;')
-                .replace(/>/g, '&gt;')
-                .replace(/"/g, '&quot;');
-            const sourceInfo = item.source_name ? 
-                `<span class="bg-[#222] text-xs px-2 py-1 rounded-full">${item.source_name}</span>` : '';
-            const sourceCode = item.source_code || currentApiSource;
-            
-            // 添加API URL属性，用于详情获取
-            const apiUrlAttr = item.api_url ? 
-                `data-api-url="${item.api_url.replace(/"/g, '&quot;')}"` : '';
-            
-            // 重新设计的卡片布局 - 支持更好的封面图显示
-            const hasCover = item.vod_pic && item.vod_pic.startsWith('http');
-            
-            // 不同的布局设计 - 桌面端使用横向布局，减小卡片尺寸
-            return `
-                <div class="card-hover bg-[#111] rounded-lg overflow-hidden cursor-pointer transition-all hover:scale-[1.02] h-full" 
-                     onclick="showDetails('${safeId}','${safeName}','${sourceCode}')" ${apiUrlAttr}>
-                    <div class="md:flex">
-                        <!-- 封面图区域 - 调整高度更紧凑 -->
-                        ${hasCover ? `
-                        <div class="md:w-1/4 relative overflow-hidden">
-                            <div class="w-full h-40 md:h-full">
-                                <img src="${item.vod_pic}" alt="${safeName}" 
-                                     class="w-full h-full object-cover transition-transform hover:scale-110" 
-                                     onerror="this.onerror=null; this.src='https://via.placeholder.com/300x450?text=${encodeURIComponent(localizedText('noCover', 'No cover'))}'; this.classList.add('object-contain');"
-                                     loading="lazy">
-                                <div class="absolute inset-0 bg-gradient-to-t from-[#111] to-transparent opacity-60"></div>
-                            </div>
-                        </div>` : ''}
-                        
-                        <!-- 内容区域 - 减小内边距 -->
-                        <div class="p-3 flex flex-col flex-grow ${hasCover ? 'md:w-3/4' : 'w-full'}">
-                            <div class="flex-grow">
-                                <h3 class="text-lg font-semibold mb-2 line-clamp-2">${safeName}</h3>
-                                
-                                <!-- 添加影片元数据 - 使用原始彩色标签样式，但减小间距 -->
-                                <div class="flex flex-wrap gap-1 mb-2">
-                                    ${(item.type_name || '').toString().replace(/</g, '&lt;') ? 
-                                      `<span class="text-xs py-0.5 px-1.5 rounded bg-opacity-20 bg-blue-500 text-blue-300">
-                                          ${(item.type_name || '').toString().replace(/</g, '&lt;')}
-                                      </span>` : ''}
-                                    ${(item.vod_year || '') ? 
-                                      `<span class="text-xs py-0.5 px-1.5 rounded bg-opacity-20 bg-purple-500 text-purple-300">
-                                          ${item.vod_year}
-                                      </span>` : ''}
-                                </div>
-                                <p class="text-gray-400 text-xs line-clamp-2">
-                                    ${(item.vod_remarks || localizedText('noDescription', 'No description')).toString().replace(/</g, '&lt;')}
-                                </p>
-                            </div>
-                            
-                            <!-- 底部元信息区域 - 减小上边距 -->
-                            <div class="flex justify-between items-center mt-2 pt-2 border-t border-gray-800">
-                                ${sourceInfo ? `<div>${sourceInfo}</div>` : '<div></div>'}
-                                <div>
-                                    <span class="text-xs text-gray-500 flex items-center">
-                                        <svg xmlns="http://www.w3.org/2000/svg" class="h-3 w-3 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z" />
-                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                                        </svg>
-                                        ${localizedText('clickToPlay', 'Play')}
-                                    </span>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            `;
-        }).join('');
+        renderSearchResultCards(results, resultsDiv);
     } catch (error) {
         console.error('搜索错误:', error);
         if (requestGeneration !== searchGeneration) return;
@@ -816,8 +852,24 @@ async function search() {
     }
 }
 
-// 显示详情 - 修改函数接受sourceCode参数和API URL
-async function showDetails(id, vod_name, sourceCode = currentApiSource) {
+function appendVideoMetadataParams(params, item) {
+    const fields = [
+        ['title', item?.vod_name, 240],
+        ['cover', item?.vod_pic, 1000],
+        ['desc', item?.vod_content || item?.vod_blurb, 1200],
+        ['type', item?.type_name, 120],
+        ['year', item?.vod_year, 20],
+        ['area', item?.vod_area, 120],
+        ['remarks', item?.vod_remarks, 240]
+    ];
+    fields.forEach(([name, value, limit]) => {
+        const text = String(value ?? '').trim();
+        if (text) params.set(name, text.slice(0, limit));
+    });
+}
+
+// 显示详情；保留搜索卡片中的元数据，供没有内嵌 metadata 的外部源使用。
+async function showDetails(id, vod_name, sourceCode = currentApiSource, item = {}) {
     if (!id) {
             showToast(localizedText('invalidVideoId', 'Invalid video ID'), 'error');
         return;
@@ -825,21 +877,21 @@ async function showDetails(id, vod_name, sourceCode = currentApiSource) {
     
     showLoading();
     try {
-        // 构建API参数
-        let apiParams = '';
+        const params = new URLSearchParams({ id: String(id) });
+        params.set('locale', currentLocale || 'zh-CN');
+        params.set('region', currentRegion || 'GLOBAL_ZH');
         
         // 处理自定义API源 - 如果有api_url参数，优先使用
         if (sourceCode === 'custom') {
-            // 查找结果中包含api_url的项目
-            const apiUrl = event.currentTarget?.getAttribute('data-api-url');
+            const apiUrl = item?.api_url || '';
             
             if (apiUrl) {
-                apiParams = '&customApi=' + encodeURIComponent(apiUrl);
+                params.set('customApi', apiUrl);
             } else {
                 // 回退到使用第一个可用的自定义API
                 const urls = parseCustomApiUrls();
                 if (urls.length > 0) {
-                    apiParams = '&customApi=' + encodeURIComponent(urls[0]);
+                    params.set('customApi', urls[0]);
                 } else {
                     showToast(localizedText('customApiUnavailable', 'No custom API available'), 'error');
                     hideLoading();
@@ -847,12 +899,13 @@ async function showDetails(id, vod_name, sourceCode = currentApiSource) {
                 }
             }
             
-            apiParams += '&source=custom';
+            params.set('source', 'custom');
         } else {
-            apiParams = '&source=' + sourceCode;
+            params.set('source', sourceCode);
+            appendVideoMetadataParams(params, { ...item, vod_name: item?.vod_name || vod_name });
         }
         
-        const response = await fetch('/api/detail?id=' + encodeURIComponent(id) + apiParams);
+        const response = await fetch('/api/detail?' + params.toString());
         
         const data = await response.json();
         
@@ -861,10 +914,13 @@ async function showDetails(id, vod_name, sourceCode = currentApiSource) {
         const modalContent = document.getElementById('modalContent');
         
         // 显示来源信息
-        const sourceName = data.videoInfo && data.videoInfo.source_name ? 
-            ` <span class="text-sm font-normal text-gray-400">(${data.videoInfo.source_name})</span>` : '';
-        
-        modalTitle.innerHTML = (vod_name || localizedText('unknownVideo', 'Unknown video')) + sourceName;
+        modalTitle.textContent = vod_name || localizedText('unknownVideo', 'Unknown video');
+        if (data.videoInfo?.source_name) {
+            const sourceLabel = document.createElement('span');
+            sourceLabel.className = 'text-sm font-normal text-gray-400';
+            sourceLabel.textContent = ` (${data.videoInfo.source_name})`;
+            modalTitle.appendChild(sourceLabel);
+        }
         currentVideoTitle = vod_name || localizedText('unknownVideo', 'Unknown video');
         
         // 保存当前源码以便后续操作
@@ -876,9 +932,7 @@ async function showDetails(id, vod_name, sourceCode = currentApiSource) {
             const safeEpisodes = data.episodes.map(url => {
                 try {
                     // 确保URL是有效的并且是http或https开头
-                    return url && (url.startsWith('http://') || url.startsWith('https://'))
-                        ? url.replace(/"/g, '&quot;')
-                        : '';
+                    return isSafeHttpUrl(url) ? url.trim() : '';
                 } catch (e) {
                     return '';
                 }
@@ -969,7 +1023,7 @@ function renderEpisodes(vodName, sourceCode = currentVideoSource || currentApiSo
         // 根据倒序状态计算真实的剧集索引
         const realIndex = episodesReversed ? currentEpisodes.length - 1 - index : index;
         return `
-            <button id="episode-${realIndex}" onclick="playVideo('${episode}','${vodName.replace(/"/g, '&quot;')}', ${realIndex}, '${String(sourceCode || '').replace(/'/g, '&#39;')}')"
+            <button id="episode-${realIndex}" onclick="playVideo(${escapeInlineJsArgument(episode)},${escapeInlineJsArgument(vodName)},${realIndex},${escapeInlineJsArgument(sourceCode)})"
                     class="px-4 py-2 bg-[#222] hover:bg-[#333] border border-[#333] rounded-lg transition-colors text-center episode-btn">
                 ${localizedText('episodeNumber', 'Episode {number}', { number: realIndex + 1 })}
             </button>

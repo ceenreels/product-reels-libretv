@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
+import vm from 'node:vm';
 
 const appSource = await readFile(new URL('../js/app.js', import.meta.url), 'utf8');
 
@@ -23,7 +24,7 @@ const loadApiSandbox = async fetchImpl => {
   sandbox.globalThis = sandbox;
   sandbox.window = sandbox;
   sandbox.location = { origin: 'https://jumeitianxia.com' };
-  for (const path of ['js/config.js', 'js/source-routing.js', 'js/api.js']) {
+  for (const path of ['js/config.js', 'js/source-routing.js', 'js/adapters/blender.js', 'js/adapters/nasa.js', 'js/api.js']) {
     vm.runInNewContext(await readFile(new URL('../' + path, import.meta.url), 'utf8'), sandbox, { filename: path });
   }
   return sandbox;
@@ -103,12 +104,14 @@ test('legacy concrete source selection becomes manual mode', async () => {
   assert.equal(sandbox.LibretvRouting.resolveSourceMode({ storedMode: '', storedSource: '' }), 'region');
 });
 
-test('English users fall back without pretending Chinese sources are English', async () => {
+test('English users receive verified English sources without relabeling Chinese sources', async () => {
   const sandbox = await loadScripts(['js/config.js', 'js/source-routing.js']);
   const primary = sandbox.LibretvRouting.getEligibleSources({ locale: 'en', region: 'GLOBAL_EN', mode: 'aggregated' });
-  const fallback = sandbox.LibretvRouting.getFallbackSources({ locale: 'en', region: 'GLOBAL_EN' });
-  assert.equal(primary.length, 0);
-  assert.ok(fallback.length > 0);
+  const plan = sandbox.LibretvRouting.buildSourcePlan({ locale: 'en', region: 'GLOBAL_EN', sourceMode: 'region' });
+  assert.deepEqual([...primary], ['blender', 'nasa']);
+  assert.ok(plan.fallback.includes('nasa'));
+  assert.ok(!plan.fallback.some(source => ['ffzy', 'tyyszy', 'ckzy', 'zy360', 'jisu'].includes(source)));
+  assert.ok(!plan.fallback.includes('blender'));
 });
 
 test('fallback excludes region-limited sources from incompatible regions', async () => {
@@ -121,7 +124,7 @@ test('fallback excludes region-limited sources from incompatible regions', async
   const fallback = sandbox.LibretvRouting.getFallbackSources({ locale: 'zh-TW', region: 'TW' });
   assert.ok(!fallback.includes('cnOnly'));
   assert.ok(fallback.includes('globalZh'));
-  assert.ok(!fallback.includes('globalEn'));
+  assert.ok(fallback.includes('globalEn'));
 });
 
 test('missing eligibility metadata is excluded from automatic routing but remains manually selectable', async () => {
@@ -153,9 +156,18 @@ test('request context is explicit and does not depend on a global user country',
 
 test('source plan has primary and fallback layers', async () => {
   const sandbox = await loadScripts(['js/config.js', 'js/source-routing.js']);
-  const plan = sandbox.LibretvRouting.buildSourcePlan({ locale: 'en', region: 'GLOBAL_EN', sourceMode: 'aggregated' });
+  const plan = sandbox.LibretvRouting.buildSourcePlan({ locale: 'en', region: 'GLOBAL_EN', sourceMode: 'region' });
+  assert.deepEqual([...plan.primary], ['blender']);
+  assert.deepEqual([...plan.fallback], ['nasa']);
+  assert.ok(!plan.fallback.some(source => ['ffzy', 'tyyszy', 'ckzy', 'zy360', 'jisu'].includes(source)));
+});
+
+test('non-English locales use English sources when no same-language source is eligible', async () => {
+  const sandbox = await loadScripts(['js/config.js', 'js/source-routing.js']);
+  vm.runInNewContext("Object.keys(API_SITES).forEach(source => { if (API_SITES[source].languages?.some(language => String(language).toLowerCase().startsWith('zh'))) API_SITES[source].enabled = false; });", sandbox);
+  const plan = sandbox.LibretvRouting.buildSourcePlan({ locale: 'zh-CN', region: 'CN', sourceMode: 'aggregated' });
   assert.deepEqual([...plan.primary], []);
-  assert.ok(plan.fallback.length > 0);
+  assert.deepEqual([...plan.fallback], ['blender', 'nasa']);
 });
 
 test('aggregated search returns primary results and routing metadata', async () => {
@@ -167,11 +179,11 @@ test('aggregated search returns primary results and routing metadata', async () 
   assert.ok(payload.routing.usedSources.length > 0);
 });
 
-test('aggregated search falls back when every primary source fails', async () => {
-  const sandbox = await loadApiSandbox(async () => ({ ok: true, text: async () => JSON.stringify({ list: [{ vod_id: '2', vod_name: 'Fallback', vod_pic: 'https://img.test/b.jpg' }] }) }));
+test('aggregated English search uses the verified English sources', async () => {
+  const sandbox = await loadApiSandbox(async () => ({ ok: true, text: async () => JSON.stringify({ data: [{ uuid: 'english-1', name: 'English result', description: 'Open video' }] }) }));
   const payload = JSON.parse(await sandbox.handleApiRequest(new URL('https://jumeitianxia.com/api/search?wd=x&locale=en&region=GLOBAL_EN&sourceMode=aggregated')));
   assert.equal(payload.code, 200);
-  assert.equal(payload.routing.fellBack, true);
+  assert.equal(payload.routing.fellBack, false);
   assert.ok(payload.list.length > 0);
 });
 

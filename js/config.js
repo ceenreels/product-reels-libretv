@@ -79,6 +79,20 @@ const API_SITES = {
         name: '豆瓣资源',
         languages: ['zh-CN'], regions: ['CN','TW','HK','SG','GLOBAL_ZH'], priority: 50,
         capabilities: { search: true, detail: true, recommendations: true }, enabled: true, defaultEligible: false
+    },
+    blender: {
+        api: 'https://video.blender.org',
+        name: 'Blender Open Movies',
+        adapter: 'blender',
+        languages: ['en'], regions: ['GLOBAL_EN'], priority: 100,
+        capabilities: { search: true, detail: true, recommendations: true }, enabled: true, defaultEligible: true
+    },
+    nasa: {
+        api: 'https://images-api.nasa.gov',
+        name: 'NASA Video Library',
+        adapter: 'nasa',
+        languages: ['en'], regions: ['GLOBAL_EN'], priority: 90,
+        capabilities: { search: true, detail: true, recommendations: true }, enabled: true, defaultEligible: true
     }
 };
 
@@ -89,7 +103,7 @@ const REGION_SOURCE_RULES = {
     HK: ['tyyszy', 'ckzy', 'zy360'],
     SG: ['ffzy', 'tyyszy', 'ckzy', 'zy360', 'jisu'],
     GLOBAL_ZH: ['tyyszy', 'ckzy', 'zy360', 'ffzy', 'jisu'],
-    GLOBAL_EN: []
+    GLOBAL_EN: ['blender', 'nasa']
 };
 
 // 添加聚合搜索的配置选项
@@ -160,7 +174,10 @@ const SECURITY_CONFIG = {
     maxQueryLength: 100,        // 最大搜索长度
     allowedApiDomains: [        // 允许的API域名
         'heimuer.xyz',
-        'ffzy5.tv'
+        'ffzy5.tv',
+        'video.blender.org',
+        'images-api.nasa.gov',
+        'images-assets.nasa.gov'
     ]
 };
 
