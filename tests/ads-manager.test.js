@@ -168,6 +168,31 @@ test('Adsterra selects fixed vertical creatives for homepage side rails', async 
   assert.equal(options.length, 2);
 });
 
+test('Adsterra keeps a failed rail marked unavailable for the inline fallback', async () => {
+  const documentRef = {
+    defaultView: { innerWidth: 1920 },
+    head: { appendChild() {} },
+    body: { appendChild() {} },
+    createElement: tag => {
+      const node = { tagName: tag.toUpperCase(), dataset: {}, setAttribute() {} };
+      Object.defineProperty(node, 'onerror', {
+        configurable: true,
+        set(handler) { this._onerror = handler; handler?.(); },
+        get() { return this._onerror; }
+      });
+      return node;
+    }
+  };
+  const slot = { dataset: {}, querySelector() { return null; }, appendChild() {} };
+  const provider = createAdsterraProvider({
+    enabled: true,
+    banners: { verticalShort: { width: 160, height: 300, key: 'short-key', src: 'https://ads.example/short.js' } }
+  });
+  await provider.init({ document: documentRef });
+  await provider.mount('ad-home-right-rail', slot, { document: documentRef, config: { format: 'verticalShort' } });
+  assert.equal(slot.dataset.libretvAdLoaded, undefined);
+});
+
 test('JuicyAds uses a desktop sidebar snippet variant when configured', async () => {
   const nodes = [];
   const documentRef = {
@@ -379,13 +404,15 @@ test('homepage JuicyAds sidebar variant uses the 300x250 creative on desktop', (
   assert.equal(ADS_CONFIG.slots['ad-juicy-home-banner'].desktopVariant, 'sidebar');
 });
 
-test('homepage inline slots are eligible only when desktop rails are hidden', () => {
-  const homepageDocument = { getElementById: id => id === 'homepageMobileAds' ? {} : null };
+test('homepage inline slots remain fallback-eligible until both rails are ready', () => {
+  const homepageDocument = { getElementById: id => id === 'homepageMobileAds' ? {} : null, documentElement: { classList: { contains: () => false } } };
+  const readyHomepageDocument = { getElementById: id => id === 'homepageMobileAds' ? {} : null, documentElement: { classList: { contains: name => name === 'homepage-vertical-ads-ready' } } };
   const playerDocument = { getElementById: () => null };
   for (const slotName of ['ad-responsive-banner', 'ad-square-banner', 'ad-native-banner', 'ad-juicy-home-banner']) {
     const eligible = ADS_CONFIG.slots[slotName].eligible;
     assert.equal(typeof eligible, 'function');
-    assert.equal(eligible({ document: homepageDocument, viewportWidth: 1920 }), false);
+    assert.equal(eligible({ document: homepageDocument, viewportWidth: 1920 }), true);
+    assert.equal(eligible({ document: readyHomepageDocument, viewportWidth: 1920 }), false);
     assert.equal(eligible({ document: homepageDocument, viewportWidth: 1280 }), true);
     assert.equal(eligible({ document: playerDocument, viewportWidth: 1920 }), true);
   }

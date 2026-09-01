@@ -248,7 +248,7 @@ body {
     }
 
     .homepage-vertical-rail {
-        display: none;
+        display: block;
     }
 
     html.homepage-left-vertical-ready #homepageLeftAd,

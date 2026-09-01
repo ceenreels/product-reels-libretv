@@ -1,5 +1,6 @@
-const homepageInlineEligibility = ({ document, viewportWidth }) => (
-    !document?.getElementById?.('homepageMobileAds') || viewportWidth < 1664
+const homepageInlineEligibility = ({ document }) => (
+    !document?.getElementById?.('homepageMobileAds')
+    || !document.documentElement?.classList?.contains?.('homepage-vertical-ads-ready')
 );
 
 export const ADS_CONFIG = {

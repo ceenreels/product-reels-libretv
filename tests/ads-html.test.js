@@ -130,6 +130,7 @@ test('homepage uses fixed vertical rails without shrinking the central content',
   assert.match(stylesCss, /\.homepage-vertical-rail\s*\{[^}]*position:\s*fixed/);
   assert.match(stylesCss, /\.homepage-vertical-rail\s*\{[^}]*width:\s*160px/);
   assert.match(stylesCss, /@media\s*\(min-width:\s*1664px\)/);
+  assert.match(stylesCss, /@media\s*\(min-width:\s*1664px\)[\s\S]*homepage-vertical-rail[\s\S]*display:\s*block/);
   assert.match(stylesCss, /@media\s*\(max-width:\s*1663px\)[\s\S]*homepage-vertical-rail[\s\S]*display:\s*none/);
   assert.doesNotMatch(indexHtml, /grid-template-columns:[^;]*homepage/);
 });

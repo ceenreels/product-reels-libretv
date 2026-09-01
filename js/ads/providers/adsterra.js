@@ -90,15 +90,15 @@ function loadBanner(container, documentRef, ad, key) {
         if (!script) return resolve(false);
         let settled = false;
         let timeoutId = null;
-        const finish = () => {
+        const finish = success => {
             if (settled) return;
             settled = true;
             if (timeoutId) clearTimeout(timeoutId);
-            resolve(true);
+            resolve(success === true);
         };
-        script.onload = finish;
-        script.onerror = finish;
-        timeoutId = setTimeout(finish, 8000);
+        script.onload = () => finish(true);
+        script.onerror = () => finish(false);
+        timeoutId = setTimeout(() => finish(false), 8000);
         if (settled) clearTimeout(timeoutId);
     });
 }
