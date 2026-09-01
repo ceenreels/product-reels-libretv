@@ -1,0 +1,74 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Streamtape - 剧美天下</title>
+    <link rel="stylesheet" href="css/styles.css">
+    <style>
+        :root { color-scheme: dark; }
+        body { margin: 0; min-height: 100vh; background: #050505; color: #f5f5f5; font-family: Arial, sans-serif; }
+        .streamtape-shell { width: min(100% - 2rem, 1100px); margin: 0 auto; padding: 1.5rem 0 3rem; }
+        .streamtape-header { display: flex; align-items: center; justify-content: space-between; gap: 1rem; margin-bottom: 1rem; }
+        .streamtape-title { margin: 0; font-size: clamp(1.1rem, 2vw, 1.5rem); overflow-wrap: anywhere; }
+        .streamtape-back { color: #aaa; text-decoration: none; white-space: nowrap; }
+        .streamtape-back:hover { color: #fff; }
+        .streamtape-frame-wrap { position: relative; width: 100%; aspect-ratio: 16 / 9; min-height: 420px; background: #111; border: 1px solid #222; border-radius: 12px; overflow: hidden; }
+        #streamtapeFrame { width: 100%; height: 100%; border: 0; display: block; }
+        .streamtape-message { padding: 4rem 1rem; text-align: center; color: #aaa; }
+        .streamtape-note { margin: 1rem 0 0; color: #666; font-size: .85rem; text-align: center; }
+        @media (max-width: 640px) { .streamtape-shell { width: min(100% - 1rem, 1100px); padding-top: 1rem; } .streamtape-frame-wrap { min-height: 240px; border-radius: 8px; } }
+    </style>
+</head>
+<body>
+    <main class="streamtape-shell">
+        <header class="streamtape-header">
+            <h1 id="streamtapeTitle" class="streamtape-title">正在加载视频…</h1>
+            <a class="streamtape-back" href="index.html">返回首页</a>
+        </header>
+
+        <div class="streamtape-frame-wrap">
+            <iframe id="streamtapeFrame"
+                    title="Streamtape video player"
+                    allow="autoplay; fullscreen"
+                    allowfullscreen
+                    scrolling="no"
+                    frameborder="0"
+                    hidden></iframe>
+            <div id="streamtapeMessage" class="streamtape-message">正在加载视频…</div>
+        </div>
+        <p class="streamtape-note">视频由 Streamtape 官方播放器提供。</p>
+    </main>
+
+    <script src="js/suggest.js"></script>
+    <script>
+        document.addEventListener('DOMContentLoaded', function () {
+            const params = new URLSearchParams(window.location.search);
+            const title = document.getElementById('streamtapeTitle');
+            const frame = document.getElementById('streamtapeFrame');
+            const message = document.getElementById('streamtapeMessage');
+
+            const findById = globalThis.SuggestRecommendations?.findById;
+            if (typeof findById !== 'function') {
+                title.textContent = '推荐清单未加载';
+                message.textContent = '请返回首页后重试。';
+                return;
+            }
+
+            findById(params.get('id')).then(item => {
+                if (!item) {
+                    title.textContent = '视频不存在';
+                    message.textContent = '这个 Streamtape 推荐视频已被移除或链接无效。';
+                    return;
+                }
+
+                title.textContent = item.title;
+                document.title = `${item.title} - 剧美天下`;
+                frame.src = item.embed_url;
+                frame.hidden = false;
+                message.hidden = true;
+            });
+        });
+    </script>
+</body>
+</html>

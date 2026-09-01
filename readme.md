@@ -95,6 +95,22 @@ newSource: {
 
 如果CMS接口非标准格式，可能需要修改项目中的`config.js`文件中的`API_CONFIG.search.path`和`API_CONFIG.detail.path`配置。
 
+### 首页站长推荐（Streamtape）
+
+首页默认推荐由可插拔的 `js/suggest.js` 负责加载根目录 `suggest.json`。`suggest.json` 中每一项使用 Streamtape 官方嵌入地址：
+
+```json
+{
+  "id": "XPoLb0JBaRuD4aM",
+  "title": "示例视频",
+  "thumbnail": "https://thumb.tapecontent.net/thumb/...",
+  "embed_url": "https://streamtape.com/e/XPoLb0JBaRuD4aM/",
+  "recommendation_type": "streamtape"
+}
+```
+
+这些视频只会显示在首页推荐，不会加入搜索源或语言路由。用户点击后进入独立页面，由 Streamtape 官方 iframe 播放，不经过本站的 DPlayer。以后如果不需要这组默认推荐，删除 `js/suggest.js` 即可；搜索、其他视频源和播放器不受影响。
+
 ## 🛠️ 技术栈
 
 - HTML5 + CSS3 + JavaScript (ES6+)
