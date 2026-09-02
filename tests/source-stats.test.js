@@ -117,7 +117,7 @@ test('source without stats capability returns unavailable without calling adapte
   assert.equal(calls, 0);
 });
 
-test('settings source statistics are lazy and use a six-hour browser cache', async () => {
+test('source statistics loader remains available independently of the settings panel', async () => {
   const appSource = await readFile(new URL('../js/app.js', import.meta.url), 'utf8');
   const local = new Map();
   let fetchCalls = 0;
@@ -162,7 +162,7 @@ test('settings source statistics are lazy and use a six-hour browser cache', asy
   assert.match(container.innerHTML, /estimate|about/i);
 });
 
-test('settings panel triggers source stats only when opened', async () => {
+test('settings panel does not trigger per-source statistics loading', async () => {
   const uiSource = await readFile(new URL('../js/ui.js', import.meta.url), 'utf8');
   let opened = false;
   let loads = 0;
@@ -177,5 +177,5 @@ test('settings panel triggers source stats only when opened', async () => {
   vm.runInNewContext(uiSource, sandbox, { filename: 'js/ui.js' });
   sandbox.toggleSettings({ stopPropagation() {} });
   assert.equal(opened, true);
-  assert.equal(loads, 1);
+  assert.equal(loads, 0);
 });

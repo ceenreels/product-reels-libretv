@@ -153,11 +153,11 @@ test('dynamic UI messages and noEligibleSources keys exist in all locales', asyn
   for (const locale of sandbox.SUPPORTED_LOCALES) for (const key of keys) assert.equal(typeof sandbox.MESSAGES[locale][key], 'string', `${locale}.${key}`);
 });
 
-test('settings exposes lazy source statistics without changing existing storage namespaces', () => {
-  assert.match(indexSource, /id="sourceStatsList"/);
-  assert.match(indexSource, /data-i18n="sourceStats"/);
+test('settings does not expose per-source statistics cards', () => {
+  assert.doesNotMatch(indexSource, /id="sourceStatsSection"/);
+  assert.doesNotMatch(indexSource, /id="sourceStatsList"/);
   assert.match(indexSource, /settings-panel[^\"]*overflow-y-auto/);
   assert.match(appSource, /libretv:sourceStats:/);
   assert.match(appSource, /function\s+loadSourceStats/);
-  assert.match(uiSource, /loadSourceStats\(\)/);
+  assert.doesNotMatch(uiSource, /loadSourceStats\(/);
 });

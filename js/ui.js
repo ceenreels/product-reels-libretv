@@ -9,10 +9,8 @@ function toggleSettings(e) {
     // 阻止事件冒泡，防止触发document的点击事件
     e && e.stopPropagation();
     const panel = document.getElementById('settingsPanel');
-    const willOpen = !panel.classList.contains('show');
     panel.classList.toggle('show');
     panel.setAttribute('aria-hidden', panel.classList.contains('show') ? 'false' : 'true');
-    if (willOpen && typeof globalThis.loadSourceStats === 'function') globalThis.loadSourceStats();
 }
 
 // 改进的Toast显示函数 - 支持队列显示多个Toast
