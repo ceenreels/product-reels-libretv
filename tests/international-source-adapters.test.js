@@ -90,6 +90,7 @@ test('PeerTube network adapter preserves instance and UUID while normalizing dir
   assert.equal(search.searchParams.get('search'), 'open animation');
   assert.equal(search.searchParams.get('start'), '10');
   assert.equal(search.searchParams.get('count'), '10');
+  assert.equal(search.searchParams.get('languageOneOf'), 'en');
 
   const payload = { total: 1, data: [{
     host: 'tube.example',

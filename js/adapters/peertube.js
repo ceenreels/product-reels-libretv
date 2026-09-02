@@ -31,6 +31,9 @@
         url.searchParams.set('start', String(paging.start));
         url.searchParams.set('count', String(paging.pageSize));
         url.searchParams.set('sort', '-match');
+        // Sepia Search is multilingual; this registered source is the
+        // English route, so constrain the network query to English results.
+        url.searchParams.set('languageOneOf', 'en');
         return url.href;
     }
 
@@ -44,6 +47,7 @@
         url.searchParams.set('start', String(paging.start));
         url.searchParams.set('count', String(paging.pageSize));
         url.searchParams.set('sort', '-publishedAt');
+        url.searchParams.set('languageOneOf', 'en');
         return url.href;
     }
 
