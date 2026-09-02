@@ -132,9 +132,21 @@ async function getSourceStats(source) {
     }
 
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), Math.min(API_REQUEST_TIMEOUT, 10000));
+    const timeoutMs = Number.isFinite(Number(API_REQUEST_TIMEOUT)) && Number(API_REQUEST_TIMEOUT) > 0
+        ? Math.min(Number(API_REQUEST_TIMEOUT), 10000)
+        : 10000;
+    let timeoutId;
     try {
-        const stats = normalizeSourceStats(await adapter.getStats({ signal: controller.signal }));
+        const timeoutPromise = new Promise((_, reject) => {
+            timeoutId = setTimeout(() => {
+                controller.abort();
+                reject(new Error('source stats request timed out'));
+            }, timeoutMs);
+        });
+        const stats = normalizeSourceStats(await Promise.race([
+            adapter.getStats({ signal: controller.signal }),
+            timeoutPromise
+        ]));
         sourceStatsCache.set(source, { stats, timestamp: Date.now() });
         return stats;
     } catch (error) {
@@ -192,29 +204,39 @@ function normalizeAdapterItems(adapter, payload, source) {
 async function handleAdapterSearch(source, searchQuery, context) {
     const adapter = getSourceAdapter(source);
     if (!adapter || typeof adapter.buildSearchUrl !== 'function') throw new Error('外部视频源适配器不可用');
-    const targetUrl = adapter.buildSearchUrl(searchQuery, 1, AGGREGATED_SEARCH_CONFIG.maxResults);
-    const payload = await fetchAdapterJson(targetUrl);
-    const list = normalizeAdapterItems(adapter, payload, source);
-    markSourceSuccess(source);
-    return JSON.stringify({
-        code: 200,
-        list,
-        routing: { locale: context.locale, region: context.region, requestedSources: [source], usedSources: list.length ? [source] : [], fellBack: false }
-    });
+    try {
+        const targetUrl = adapter.buildSearchUrl(searchQuery, 1, AGGREGATED_SEARCH_CONFIG.maxResults);
+        const payload = await fetchAdapterJson(targetUrl);
+        const list = normalizeAdapterItems(adapter, payload, source);
+        markSourceSuccess(source);
+        return JSON.stringify({
+            code: 200,
+            list,
+            routing: { locale: context.locale, region: context.region, requestedSources: [source], usedSources: list.length ? [source] : [], fellBack: false }
+        });
+    } catch (error) {
+        markSourceFailure(source);
+        throw error;
+    }
 }
 
 async function handleAdapterRecommendations(source, page, context) {
     const adapter = getSourceAdapter(source);
     if (!adapter) throw new Error('外部视频源适配器不可用');
-    const buildUrl = adapter.buildRecommendationsUrl || adapter.buildSearchUrl;
-    if (typeof buildUrl !== 'function') throw new Error('外部视频源不支持推荐');
-    const targetUrl = adapter.buildRecommendationsUrl
-        ? adapter.buildRecommendationsUrl(page, ADAPTER_RECOMMENDATION_LIMIT)
-        : adapter.buildSearchUrl('', page, ADAPTER_RECOMMENDATION_LIMIT);
-    const payload = await fetchAdapterJson(targetUrl);
-    const list = normalizeAdapterItems(adapter, payload, source);
-    markSourceSuccess(source);
-    return { list, detailUrl: targetUrl };
+    try {
+        const buildUrl = adapter.buildRecommendationsUrl || adapter.buildSearchUrl;
+        if (typeof buildUrl !== 'function') throw new Error('外部视频源不支持推荐');
+        const targetUrl = adapter.buildRecommendationsUrl
+            ? adapter.buildRecommendationsUrl(page, ADAPTER_RECOMMENDATION_LIMIT)
+            : adapter.buildSearchUrl('', page, ADAPTER_RECOMMENDATION_LIMIT);
+        const payload = await fetchAdapterJson(targetUrl);
+        const list = normalizeAdapterItems(adapter, payload, source);
+        markSourceSuccess(source);
+        return { list, detailUrl: targetUrl };
+    } catch (error) {
+        markSourceFailure(source);
+        throw error;
+    }
 }
 
 function getAdapterMetadataHint(url) {
@@ -238,25 +260,44 @@ async function handleAdapterDetail(source, id, context, metadataHint = {}) {
         throw new Error('外部视频源详情适配器不可用');
     }
     let detailUrl = adapter.buildDetailUrl(id);
-    let payload = await fetchAdapterJson(detailUrl);
+    let payload;
+    try {
+        payload = await fetchAdapterJson(detailUrl);
+    } catch (error) {
+        markSourceFailure(source);
+        throw error;
+    }
     const metadataPayload = payload;
     if (typeof adapter.getCollectionUrl === 'function' && /\/search(?:\?|$)/i.test(detailUrl)) {
         const collectionUrl = adapter.getCollectionUrl(payload);
         if (collectionUrl) {
             detailUrl = collectionUrl;
-            payload = await fetchAdapterJson(collectionUrl);
+            try {
+                payload = await fetchAdapterJson(collectionUrl);
+            } catch (error) {
+                markSourceFailure(source);
+                throw error;
+            }
         }
     }
-    const normalized = adapter.normalizeDetailResponse(payload, id) || {};
-    const metadataItems = typeof adapter.normalizeSearchResponse === 'function'
-        ? adapter.normalizeSearchResponse(metadataPayload)
-        : [];
+    let normalized;
+    let metadataItems;
+    let adapterMetadata;
+    try {
+        normalized = adapter.normalizeDetailResponse(payload, id) || {};
+        metadataItems = typeof adapter.normalizeSearchResponse === 'function'
+            ? adapter.normalizeSearchResponse(metadataPayload)
+            : [];
+        adapterMetadata = typeof adapter.normalizeDetailMetadata === 'function'
+            ? (adapter.normalizeDetailMetadata(payload, id) || {})
+            : {};
+    } catch (error) {
+        markSourceFailure(source);
+        throw error;
+    }
     const normalizedMetadata = Array.isArray(normalized)
         ? (metadataItems[0] || {})
         : { ...(normalized || {}), ...(normalized?.videoInfo || {}) };
-    const adapterMetadata = typeof adapter.normalizeDetailMetadata === 'function'
-        ? (adapter.normalizeDetailMetadata(payload, id) || {})
-        : {};
     const metadata = { ...adapterMetadata, ...metadataHint, ...normalizedMetadata };
     const rawEpisodes = Array.isArray(normalized) ? normalized : normalized.episodes;
     const episodes = Array.isArray(rawEpisodes) ? rawEpisodes.filter(url => /^https?:\/\//i.test(url)) : [];
