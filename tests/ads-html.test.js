@@ -21,10 +21,14 @@ test('all public pages expose language metadata and privacy mentions locale pref
   assert.match(privacyHtml, /语言|地区|locale|region/i);
 });
 
-test('homepage exposes locale, region, source mode, and SEO language links', () => {
+test('homepage hides redundant region and source mode controls', () => {
   assert.match(indexHtml, /id="localeSelect"/);
+  assert.match(indexHtml, /id="advancedRoutingControls"[^>]*\bhidden\b/);
   assert.match(indexHtml, /id="regionSelect"/);
   assert.match(indexHtml, /id="sourceModeSelect"/);
+  const sourceSelection = indexHtml.match(/<div id="sourceSelectionControl"[\s\S]*?<\/div>/)?.[0] || '';
+  assert.match(sourceSelection, /id="apiSource"/);
+  assert.doesNotMatch(sourceSelection, /\bhidden\b/);
   assert.match(indexHtml, /hreflang="zh-CN"/);
   assert.match(indexHtml, /hreflang="zh-TW"/);
   assert.match(indexHtml, /hreflang="en"/);
