@@ -25,6 +25,8 @@ let recommendationController = null;
 let searchGeneration = 0;
 let searchController = null;
 const RECOMMENDATION_CACHE_TTL = 6 * 60 * 60 * 1000;
+const SOURCE_STATS_BROWSER_CACHE_TTL = 6 * 60 * 60 * 1000;
+let sourceStatsGeneration = 0;
 const recommendationCache = typeof createRecommendationCache === 'function'
     ? createRecommendationCache()
     : null;
@@ -63,6 +65,136 @@ function localizedText(key, fallback, values) {
         text = text.replaceAll(`{${name}}`, String(value));
     });
     return text;
+}
+
+function sourceStatsCacheKey(source) {
+    return `libretv:sourceStats:${source}`;
+}
+
+function readSourceStatsCache(source) {
+    try {
+        const raw = localStorage.getItem(sourceStatsCacheKey(source));
+        if (!raw) return null;
+        const cached = JSON.parse(raw);
+        if (!cached || !cached.stats || !Number.isFinite(Number(cached.timestamp))) return null;
+        if (Date.now() - Number(cached.timestamp) >= SOURCE_STATS_BROWSER_CACHE_TTL) {
+            localStorage.removeItem(sourceStatsCacheKey(source));
+            return null;
+        }
+        return cached.stats;
+    } catch (_) {
+        return null;
+    }
+}
+
+function saveSourceStatsCache(source, stats) {
+    try {
+        localStorage.setItem(sourceStatsCacheKey(source), JSON.stringify({ stats, timestamp: Date.now() }));
+    } catch (_) {
+        // A full/private-storage browser must not prevent the settings panel from rendering.
+    }
+}
+
+function formatSourceStatsCount(value, estimated = false) {
+    if (!Number.isFinite(Number(value))) return localizedText('sourceStatsUnavailable', 'Unavailable');
+    const count = Number(value).toLocaleString();
+    return estimated ? localizedText('sourceStatsApproximate', 'about {count}', { count }) : count;
+}
+
+function formatSourceStatsUpdatedAt(value) {
+    if (!value) return localizedText('sourceStatsNotUpdated', 'Not updated');
+    const timestamp = Date.parse(value);
+    if (!Number.isFinite(timestamp)) return localizedText('sourceStatsNotUpdated', 'Not updated');
+    const seconds = Math.max(0, Math.floor((Date.now() - timestamp) / 1000));
+    let relative;
+    if (seconds < 60) relative = localizedText('sourceStatsJustNow', 'just now');
+    else if (seconds < 3600) relative = localizedText('sourceStatsMinutesAgo', '{count}m ago', { count: Math.floor(seconds / 60) });
+    else if (seconds < 86400) relative = localizedText('sourceStatsHoursAgo', '{count}h ago', { count: Math.floor(seconds / 3600) });
+    else relative = localizedText('sourceStatsDaysAgo', '{count}d ago', { count: Math.floor(seconds / 86400) });
+    return localizedText('sourceStatsUpdated', 'Updated {time}', { time: relative });
+}
+
+function normalizeSourceStatsForUi(stats) {
+    const value = stats && typeof stats === 'object' ? stats : {};
+    const countOrNull = input => input === null || input === undefined || input === ''
+        ? null
+        : Number.isFinite(Number(input)) ? Number(input) : null;
+    return {
+        catalogCount: countOrNull(value.catalogCount),
+        playableCount: countOrNull(value.playableCount),
+        countKind: ['authoritative', 'estimated', 'unavailable'].includes(value.countKind) ? value.countKind : 'unavailable',
+        updatedAt: typeof value.updatedAt === 'string' ? value.updatedAt : '',
+        status: typeof value.status === 'string' ? value.status : 'unknown',
+    };
+}
+
+function renderSourceStatsRows(rows, container) {
+    if (!container) return;
+    container.innerHTML = rows.map(({ code, site, stats, loading }) => {
+        const safeName = escapeHtml(site?.name || code);
+        const safeCode = escapeHtml(code);
+        const languages = escapeHtml(Array.isArray(site?.languages) && site.languages.length ? site.languages.join(', ') : '—');
+        const normalized = normalizeSourceStatsForUi(stats);
+        const isEstimated = normalized.countKind === 'estimated';
+        const catalog = loading
+            ? localizedText('sourceStatsLoading', 'Loading...')
+            : formatSourceStatsCount(normalized.catalogCount, isEstimated);
+        const playable = loading
+            ? localizedText('sourceStatsLoading', 'Loading...')
+            : normalized.playableCount === null
+                ? localizedText('sourceStatsUnavailable', 'Unavailable')
+                : formatSourceStatsCount(normalized.playableCount, isEstimated);
+        const status = loading
+            ? localizedText('sourceStatsLoading', 'Loading...')
+            : normalized.status === 'available'
+                ? localizedText('sourceHealthy', 'Available')
+                : localizedText('sourceStatsError', 'Temporarily unavailable');
+        const updated = loading ? '' : formatSourceStatsUpdatedAt(normalized.updatedAt);
+        return `<article class="source-stats-row border border-[#292929] rounded-lg p-3" data-source-stats-code="${safeCode}">
+            <div class="flex items-center justify-between gap-2"><strong class="text-sm text-white">${safeName}</strong><span class="text-[10px] text-gray-500">${safeCode}</span></div>
+            <div class="text-xs text-gray-400 mt-1">${escapeHtml(languages)}</div>
+            <div class="text-xs text-gray-300 mt-2"><span>${escapeHtml(localizedText('sourceStatsCatalog', 'Catalog: {count}', { count: catalog }))}</span><span class="mx-1 text-gray-600">·</span><span>${escapeHtml(localizedText('sourceStatsPlayable', 'Playable: {count}', { count: playable }))}</span></div>
+            <div class="flex items-center justify-between gap-2 text-[11px] mt-1"><span class="${normalized.status === 'available' ? 'text-green-400' : 'text-gray-500'}">${escapeHtml(status)}</span><span class="text-gray-600">${escapeHtml(updated)}</span></div>
+        </article>`;
+    }).join('');
+}
+
+async function loadSourceStats({ force = false } = {}) {
+    const container = document.getElementById('sourceStatsList');
+    if (!container || typeof API_SITES === 'undefined' || !API_SITES) return [];
+    const entries = Object.entries(API_SITES).filter(([, site]) => site && site.enabled !== false);
+    if (!entries.length) {
+        container.innerHTML = `<p class="text-xs text-gray-500">${escapeHtml(localizedText('sourceStatsNoSources', 'No enabled sources'))}</p>`;
+        return [];
+    }
+
+    const requestGeneration = ++sourceStatsGeneration;
+    const rows = entries.map(([code, site]) => ({ code, site, stats: force ? null : readSourceStatsCache(code), loading: false }));
+    // Existing cached rows are shown immediately; only cache misses make a request.
+    rows.forEach(row => { row.loading = !row.stats; });
+    renderSourceStatsRows(rows, container);
+
+    const pending = entries.map(async ([code, site], index) => {
+        if (!force && rows[index].stats) return rows[index].stats;
+        try {
+            const query = new URLSearchParams({ source: code });
+            if (force) query.set('refresh', '1');
+            const response = await fetch(`/api/source-stats?${query.toString()}`);
+            const payload = await response.json();
+            const stats = normalizeSourceStatsForUi(payload?.stats);
+            rows[index] = { code, site, stats, loading: false };
+            saveSourceStatsCache(code, stats);
+            if (requestGeneration === sourceStatsGeneration) renderSourceStatsRows(rows, container);
+            return stats;
+        } catch (_) {
+            const stats = { catalogCount: null, playableCount: null, countKind: 'unavailable', updatedAt: new Date().toISOString(), status: 'error' };
+            rows[index] = { code, site, stats, loading: false };
+            saveSourceStatsCache(code, stats);
+            if (requestGeneration === sourceStatsGeneration) renderSourceStatsRows(rows, container);
+            return stats;
+        }
+    });
+    return Promise.all(pending);
 }
 
 function getUrlLocaleHint(search) {

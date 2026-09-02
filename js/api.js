@@ -68,6 +68,88 @@ function isAdapterSource(source) {
 }
 
 const ADAPTER_RECOMMENDATION_LIMIT = 12;
+const SOURCE_STATS_CACHE_TTL = 6 * 60 * 60 * 1000;
+const sourceStatsCache = new Map();
+
+function unavailableSourceStats(status = 'error') {
+    return {
+        catalogCount: null,
+        playableCount: null,
+        countKind: 'unavailable',
+        updatedAt: new Date().toISOString(),
+        sampleSize: null,
+        status
+    };
+}
+
+function normalizeSourceStats(stats, status = 'available') {
+    const sourceStats = stats && typeof stats === 'object' ? stats : {};
+    const numberOrNull = value => value === null || value === undefined || value === ''
+        ? null
+        : Number.isFinite(Number(value)) && Number(value) >= 0 ? Number(value) : null;
+    const countKind = ['authoritative', 'estimated', 'unavailable'].includes(sourceStats.countKind)
+        ? sourceStats.countKind
+        : (numberOrNull(sourceStats.catalogCount) === null ? 'unavailable' : 'estimated');
+    const normalizedStatus = typeof sourceStats.status === 'string' && sourceStats.status.trim()
+        ? sourceStats.status.trim().slice(0, 40)
+        : status;
+    return {
+        catalogCount: numberOrNull(sourceStats.catalogCount),
+        playableCount: numberOrNull(sourceStats.playableCount),
+        countKind,
+        updatedAt: typeof sourceStats.updatedAt === 'string' && sourceStats.updatedAt
+            ? sourceStats.updatedAt
+            : new Date().toISOString(),
+        sampleSize: numberOrNull(sourceStats.sampleSize),
+        status: normalizedStatus
+    };
+}
+
+async function getSourceStats(source) {
+    const cached = sourceStatsCache.get(source);
+    if (cached && Date.now() - cached.timestamp < SOURCE_STATS_CACHE_TTL) return cached.stats;
+    sourceStatsCache.delete(source);
+
+    const site = API_SITES[source];
+    if (!site || site.enabled === false) {
+        const stats = unavailableSourceStats('error');
+        sourceStatsCache.set(source, { stats, timestamp: Date.now() });
+        return stats;
+    }
+
+    const adapter = getSourceAdapter(source);
+    if (!adapter || typeof adapter.getStats !== 'function') {
+        const fallback = site.stats && typeof site.stats === 'object' && site.stats.status === 'available'
+            ? normalizeSourceStats(site.stats, 'available')
+            : unavailableSourceStats('error');
+        sourceStatsCache.set(source, { stats: fallback, timestamp: Date.now() });
+        return fallback;
+    }
+
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), Math.min(API_REQUEST_TIMEOUT, 10000));
+    try {
+        const stats = normalizeSourceStats(await adapter.getStats({ signal: controller.signal }));
+        sourceStatsCache.set(source, { stats, timestamp: Date.now() });
+        return stats;
+    } catch (error) {
+        console.warn(`获取${source}源统计失败:`, error);
+        const stats = unavailableSourceStats('error');
+        sourceStatsCache.set(source, { stats, timestamp: Date.now() });
+        return stats;
+    } finally {
+        clearTimeout(timeoutId);
+    }
+}
+
+async function handleSourceStatsRequest(url) {
+    const source = String(url.searchParams.get('source') || '').trim();
+    if (!source || !hasOwnApiSource(source)) {
+        return JSON.stringify({ code: 400, source, stats: unavailableSourceStats('error') });
+    }
+    if (url.searchParams.get('refresh') === '1') sourceStatsCache.delete(source);
+    return JSON.stringify({ code: 200, source, stats: await getSourceStats(source) });
+}
 
 async function fetchAdapterJson(targetUrl) {
     const controller = new AbortController();
@@ -309,6 +391,10 @@ async function handleApiRequest(url) {
     let routingNoEligibleSources = false;
     
     try {
+        if (url.pathname === '/api/source-stats') {
+            return await handleSourceStatsRequest(url);
+        }
+
         if (url.pathname === '/api/search') {
             const searchQuery = url.searchParams.get('wd');
             if (!searchQuery) {

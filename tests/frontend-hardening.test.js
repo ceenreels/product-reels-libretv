@@ -6,6 +6,7 @@ import vm from 'node:vm';
 const appSource = await readFile(new URL('../js/app.js', import.meta.url), 'utf8');
 const uiSource = await readFile(new URL('../js/ui.js', import.meta.url), 'utf8');
 const playerSource = await readFile(new URL('../player.html', import.meta.url), 'utf8');
+const indexSource = await readFile(new URL('../index.html', import.meta.url), 'utf8');
 
 const load = async (source, overrides = {}) => {
   const local = new Map();
@@ -150,4 +151,12 @@ test('dynamic UI messages and noEligibleSources keys exist in all locales', asyn
   const sandbox = await load(source + '(function(){})();', { LibretvI18n: undefined });
   const keys = ['searchPrompt', 'searchEmpty', 'searchError', 'searchTimeout', 'clickToPlay', 'unknownVideo', 'noEpisodes', 'noEligibleSources', 'siteTesting', 'customApiUnset', 'adLabel'];
   for (const locale of sandbox.SUPPORTED_LOCALES) for (const key of keys) assert.equal(typeof sandbox.MESSAGES[locale][key], 'string', `${locale}.${key}`);
+});
+
+test('settings exposes lazy source statistics without changing existing storage namespaces', () => {
+  assert.match(indexSource, /id="sourceStatsList"/);
+  assert.match(indexSource, /data-i18n="sourceStats"/);
+  assert.match(appSource, /libretv:sourceStats:/);
+  assert.match(appSource, /function\s+loadSourceStats/);
+  assert.match(uiSource, /loadSourceStats\(\)/);
 });
