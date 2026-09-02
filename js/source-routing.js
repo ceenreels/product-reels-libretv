@@ -1,5 +1,5 @@
 (function (root) {
-  var fallbackRules = { CN: ['ffzy','tyyszy','zy360','jisu'], TW: ['tyyszy','zy360'], HK: ['tyyszy','zy360'], SG: ['ffzy','tyyszy'], GLOBAL_EN: [], GLOBAL_ZH: [] };
+  var fallbackRules = { CN: ['ffzy','tyyszy','zy360','jisu'], TW: ['tyyszy','zy360'], HK: ['tyyszy','zy360'], SG: ['ffzy','tyyszy'], GLOBAL_EN: ['blender','archive','peertube','wikimedia','nasa'], GLOBAL_ZH: [] };
   var HEALTH_TTL = 5 * 60 * 1000;
   var health = Object.create(null);
   function hasOwn(obj, key) { return obj != null && Object.prototype.hasOwnProperty.call(obj, key); }
@@ -22,6 +22,14 @@
     if (nowValue(now) - state.at >= HEALTH_TTL) { delete health[source]; return true; }
     return state.ok !== false;
   }
+  function sortByPreferredOrder(ids, preferred, map) {
+    var order = Array.isArray(preferred) ? preferred : [];
+    return ids.sort(function(a,b){
+      var pa = order.indexOf(a), pb = order.indexOf(b);
+      if (pa >= 0 || pb >= 0) return (pa < 0 ? 999 : pa) - (pb < 0 ? 999 : pb);
+      return info(b,map[b],0).priority - info(a,map[a],0).priority;
+    });
+  }
   function getEligibleSources(opts) {
     opts = opts || {}; var map=sourceMap(), mode=opts.mode || 'region', selected=opts.selectedSource, capability=opts.capability || 'search', ids=Object.keys(map);
     if (mode === 'manual') return selected && hasOwn(map, selected) && info(selected, map[selected], 0).enabled ? [selected] : [];
@@ -29,11 +37,13 @@
     try { if (typeof REGION_SOURCE_RULES !== 'undefined') rules = REGION_SOURCE_RULES; } catch (_) {}
     var preferred = rules[opts.region] || [];
     ids = ids.filter(function(id,i){ var s=info(id,map[id],i); return s.enabled && s.defaultEligible && isSourceHealthy(id, opts.now) && s.capabilities[capability] !== false && langMatch(s,opts.locale) && regionMatch(s, opts.region); });
-    ids.sort(function(a,b){ var pa=preferred.indexOf(a), pb=preferred.indexOf(b); if(pa>=0||pb>=0) return (pa<0?999:pa)-(pb<0?999:pb); return info(b,map[b],0).priority-info(a,map[a],0).priority; });
+    sortByPreferredOrder(ids, preferred, map);
     return mode === 'region' ? ids.slice(0,1) : ids;
   }
   function getFallbackSources(opts) {
     opts=opts||{}; var map=sourceMap(), locale=opts.locale || 'zh-CN', capability=opts.capability || 'search', eligible=getEligibleSources({locale:locale,region:opts.region,mode:'aggregated',now:opts.now,capability}), all=Object.keys(map).filter(function(id){var s=info(id,map[id],0); return s.enabled&&s.defaultEligible&&isSourceHealthy(id, opts.now)&&s.capabilities[capability]!==false;});
+    var rules = root.REGION_SOURCE_RULES || fallbackRules;
+    try { if (typeof REGION_SOURCE_RULES !== 'undefined') rules = REGION_SOURCE_RULES; } catch (_) {}
     var same=all.filter(function(id){var s=info(id,map[id],0); return langMatch(s,locale)&&regionMatch(s, opts.region)&&eligible.indexOf(id)<0;});
     var global=all.filter(function(id){var s=info(id,map[id],0); return (s.regions||[]).some(function(r){return /^GLOBAL_/.test(r);})&&langMatch(s,locale)&&eligible.indexOf(id)<0&&same.indexOf(id)<0;});
     // English is the explicit cross-language fallback. Keep it global and
@@ -41,6 +51,10 @@
     // while Chinese/other locales can still recover when no matching source
     // is available.
     var englishFallback = all.filter(function(id){var s=info(id,map[id],0); return langMatch(s,'en')&&(s.regions||[]).some(function(r){return r === 'GLOBAL_EN' || r === 'GLOBAL';})&&eligible.indexOf(id)<0&&same.indexOf(id)<0&&global.indexOf(id)<0;});
+    // English is the explicit cross-language fallback. Respect the same
+    // deterministic order as the GLOBAL_EN route instead of object insertion
+    // order, so adding a source cannot silently reshuffle fallback behavior.
+    sortByPreferredOrder(englishFallback, rules.GLOBAL_EN || [], map);
     return eligible.concat(same,global,englishFallback);
   }
   function normalizeLocale(value) {

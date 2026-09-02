@@ -85,14 +85,40 @@ const API_SITES = {
         name: 'Blender Open Movies',
         adapter: 'blender',
         languages: ['en'], regions: ['GLOBAL_EN'], priority: 100,
-        capabilities: { search: true, detail: true, recommendations: true }, enabled: true, defaultEligible: true
+        capabilities: { search: true, detail: true, playback: true, recommendations: true, stats: true }, enabled: true, defaultEligible: true,
+        stats: { catalogCount: null, playableCount: null, countKind: 'unavailable', sampleSize: 0, updatedAt: '', status: 'unknown' }
     },
     nasa: {
         api: 'https://images-api.nasa.gov',
         name: 'NASA Video Library',
         adapter: 'nasa',
         languages: ['en'], regions: ['GLOBAL_EN'], priority: 90,
-        capabilities: { search: true, detail: true, recommendations: true }, enabled: true, defaultEligible: true
+        capabilities: { search: true, detail: true, playback: true, recommendations: true, stats: true }, enabled: true, defaultEligible: true,
+        stats: { catalogCount: null, playableCount: null, countKind: 'unavailable', sampleSize: 0, updatedAt: '', status: 'unknown' }
+    },
+    archive: {
+        api: 'https://archive.org',
+        name: 'Internet Archive',
+        adapter: 'archive',
+        languages: ['en'], regions: ['GLOBAL_EN'], priority: 95,
+        capabilities: { search: true, detail: true, playback: true, recommendations: true, stats: true }, enabled: true, defaultEligible: true,
+        stats: { catalogCount: null, playableCount: null, countKind: 'unavailable', sampleSize: 0, updatedAt: '', status: 'unknown' }
+    },
+    peertube: {
+        api: 'https://search.joinpeertube.org',
+        name: 'PeerTube Network',
+        adapter: 'peertube',
+        languages: ['en'], regions: ['GLOBAL_EN'], priority: 90,
+        capabilities: { search: true, detail: true, playback: true, recommendations: true, stats: true }, enabled: true, defaultEligible: true,
+        stats: { catalogCount: null, playableCount: null, countKind: 'unavailable', sampleSize: 0, updatedAt: '', status: 'unknown' }
+    },
+    wikimedia: {
+        api: 'https://commons.wikimedia.org',
+        name: 'Wikimedia Commons',
+        adapter: 'wikimedia',
+        languages: ['en'], regions: ['GLOBAL_EN'], priority: 85,
+        capabilities: { search: true, detail: true, playback: true, recommendations: true, stats: true }, enabled: true, defaultEligible: true,
+        stats: { catalogCount: null, playableCount: null, countKind: 'unavailable', sampleSize: 0, updatedAt: '', status: 'unknown' }
     }
 };
 
@@ -103,7 +129,7 @@ const REGION_SOURCE_RULES = {
     HK: ['tyyszy', 'ckzy', 'zy360'],
     SG: ['ffzy', 'tyyszy', 'ckzy', 'zy360', 'jisu'],
     GLOBAL_ZH: ['tyyszy', 'ckzy', 'zy360', 'ffzy', 'jisu'],
-    GLOBAL_EN: ['blender', 'nasa']
+    GLOBAL_EN: ['blender', 'archive', 'peertube', 'wikimedia', 'nasa']
 };
 
 // 添加聚合搜索的配置选项
@@ -176,6 +202,10 @@ const SECURITY_CONFIG = {
         'heimuer.xyz',
         'ffzy5.tv',
         'video.blender.org',
+        'archive.org',
+        'search.joinpeertube.org',
+        'commons.wikimedia.org',
+        'upload.wikimedia.org',
         'images-api.nasa.gov',
         'images-assets.nasa.gov'
     ]

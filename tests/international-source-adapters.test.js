@@ -137,6 +137,15 @@ test('PeerTube adapter accepts HLS, rejects insecure/audio URLs, and reports est
   assert.equal(stats.status, 'available');
 });
 
+test('PeerTube stable IDs preserve UUID punctuation through detail URL decoding', async () => {
+  const adapter = await loadAdapter('peertube.js', 'PeerTubeAdapter');
+  const id = adapter.normalizeSearchResponse({ data: [{
+    host: 'tube.example', uuid: 'uuid__with_under_score', name: 'Stable ID', files: []
+  }] }).list[0].vod_id;
+  assert.match(id, /^[\w-]+$/);
+  assert.equal(adapter.buildDetailUrl(id), 'https://tube.example/api/v1/videos/uuid__with_under_score');
+});
+
 test('Wikimedia adapter searches video files and normalizes browser-playable media', async () => {
   const adapter = await loadAdapter('wikimedia.js', 'WikimediaAdapter');
   const search = new URL(adapter.buildSearchUrl('open film', 2, 8));

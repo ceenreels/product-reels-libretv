@@ -150,8 +150,12 @@ test('English recommendations use Blender first and expose source metadata', asy
 
 test('homepage loads international adapters before API interception', async () => {
   const html = await readFile(new URL('../index.html', import.meta.url), 'utf8');
-  assert.ok(html.indexOf('src="js/adapters/blender.js"') < html.indexOf('src="js/api.js"'));
-  assert.ok(html.indexOf('src="js/adapters/nasa.js"') < html.indexOf('src="js/api.js"'));
+  const apiIndex = html.indexOf('src="js/api.js"');
+  for (const adapter of ['blender', 'archive', 'peertube', 'wikimedia', 'nasa']) {
+    const index = html.indexOf(`src="js/adapters/${adapter}.js"`);
+    assert.ok(index >= 0, `missing ${adapter} adapter script`);
+    assert.ok(index < apiIndex, `${adapter} adapter must load before api.js`);
+  }
 });
 
 test('API interceptor leaves cross-origin provider API paths untouched', async () => {

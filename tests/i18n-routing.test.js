@@ -108,7 +108,7 @@ test('English users receive verified English sources without relabeling Chinese 
   const sandbox = await loadScripts(['js/config.js', 'js/source-routing.js']);
   const primary = sandbox.LibretvRouting.getEligibleSources({ locale: 'en', region: 'GLOBAL_EN', mode: 'aggregated' });
   const plan = sandbox.LibretvRouting.buildSourcePlan({ locale: 'en', region: 'GLOBAL_EN', sourceMode: 'region' });
-  assert.deepEqual([...primary], ['blender', 'nasa']);
+  assert.deepEqual([...primary], ['blender', 'archive', 'peertube', 'wikimedia', 'nasa']);
   assert.ok(plan.fallback.includes('nasa'));
   assert.ok(!plan.fallback.some(source => ['ffzy', 'tyyszy', 'ckzy', 'zy360', 'jisu'].includes(source)));
   assert.ok(!plan.fallback.includes('blender'));
@@ -158,7 +158,7 @@ test('source plan has primary and fallback layers', async () => {
   const sandbox = await loadScripts(['js/config.js', 'js/source-routing.js']);
   const plan = sandbox.LibretvRouting.buildSourcePlan({ locale: 'en', region: 'GLOBAL_EN', sourceMode: 'region' });
   assert.deepEqual([...plan.primary], ['blender']);
-  assert.deepEqual([...plan.fallback], ['nasa']);
+  assert.deepEqual([...plan.fallback], ['archive', 'peertube', 'wikimedia', 'nasa']);
   assert.ok(!plan.fallback.some(source => ['ffzy', 'tyyszy', 'ckzy', 'zy360', 'jisu'].includes(source)));
 });
 
@@ -167,7 +167,7 @@ test('non-English locales use English sources when no same-language source is el
   vm.runInNewContext("Object.keys(API_SITES).forEach(source => { if (API_SITES[source].languages?.some(language => String(language).toLowerCase().startsWith('zh'))) API_SITES[source].enabled = false; });", sandbox);
   const plan = sandbox.LibretvRouting.buildSourcePlan({ locale: 'zh-CN', region: 'CN', sourceMode: 'aggregated' });
   assert.deepEqual([...plan.primary], []);
-  assert.deepEqual([...plan.fallback], ['blender', 'nasa']);
+  assert.deepEqual([...plan.fallback], ['blender', 'archive', 'peertube', 'wikimedia', 'nasa']);
 });
 
 test('aggregated search returns primary results and routing metadata', async () => {

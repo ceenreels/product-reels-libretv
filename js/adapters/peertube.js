@@ -83,6 +83,7 @@
     // dots and colons into two hexadecimal characters.
     function encodeStablePart(value) {
         return encodeURIComponent(String(value ?? ''))
+            .replace(/_/g, '_5f')
             .replace(/\./g, '_2e')
             .replace(/%([0-9a-f]{2})/gi, '_$1')
             .replace(/~/g, '_7e');

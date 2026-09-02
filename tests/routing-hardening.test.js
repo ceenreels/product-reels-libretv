@@ -131,3 +131,26 @@ test('aggregated search distinguishes no eligible sources from eligible sources 
   assert.equal(eligiblePayload.code, 200);
   assert.equal(eligiblePayload.routing.noEligibleSources, false);
 });
+
+test('English routing keeps every automatic candidate English and orders the expanded catalog', async () => {
+  const sandbox = await loadScripts(['js/config.js', 'js/source-routing.js']);
+  const plan = sandbox.LibretvRouting.buildSourcePlan({ locale: 'en', region: 'GLOBAL_EN', sourceMode: 'region' });
+  assert.deepEqual([...plan.primary], ['blender']);
+  assert.deepEqual([...plan.fallback].slice(0, 4), ['archive', 'peertube', 'wikimedia', 'nasa']);
+  assert.ok(![...plan.primary, ...plan.fallback].some(source => ['ffzy', 'tyyszy', 'ckzy', 'zy360', 'jisu'].includes(source)));
+});
+
+test('non-English routing uses English sources as the final fallback when its locale has no source', async () => {
+  const sandbox = await loadScripts(['js/config.js', 'js/source-routing.js']);
+  vm.runInNewContext("Object.keys(API_SITES).forEach(source => { API_SITES[source].enabled = API_SITES[source].languages?.some(language => String(language).toLowerCase().startsWith('en')) === true; });", sandbox);
+  const plan = sandbox.LibretvRouting.buildSourcePlan({ locale: 'zh-CN', region: 'CN', sourceMode: 'aggregated' });
+  assert.deepEqual([...plan.primary], []);
+  assert.deepEqual([...plan.fallback], ['blender', 'archive', 'peertube', 'wikimedia', 'nasa']);
+});
+
+test('source statistics failures do not remove an otherwise healthy source from routing', async () => {
+  const sandbox = await loadScripts(['js/config.js', 'js/source-routing.js']);
+  vm.runInNewContext("API_SITES.archive.stats = { catalogCount: null, playableCount: null, countKind: 'unavailable', status: 'error', updatedAt: '' };", sandbox);
+  const plan = sandbox.LibretvRouting.buildSourcePlan({ locale: 'en', region: 'GLOBAL_EN', sourceMode: 'aggregated' });
+  assert.ok([...plan.primary, ...plan.fallback].includes('archive'));
+});
