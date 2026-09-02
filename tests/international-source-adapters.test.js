@@ -178,7 +178,8 @@ test('Wikimedia adapter searches video files and normalizes browser-playable med
   assert.equal(normalized.total, 2);
   assert.equal(normalized.list.length, 1);
   assertVideoItem(normalized.list[0], 'wikimedia', 'Wikimedia Commons');
-  assert.equal(normalized.list[0].vod_id, 'File:Open film.webm');
+  assert.match(normalized.list[0].vod_id, /^wikimedia_[\w-]+$/);
+  assert.equal(adapter.buildDetailUrl(normalized.list[0].vod_id), adapter.buildDetailUrl(title));
   assert.equal(normalized.list[0].vod_pic, 'https://upload.wikimedia.org/wikipedia/commons/thumb/a/ab/Open_film.webm/640px-Open_film.webm.jpg');
   assert.equal(normalized.list[0].vod_play_url, 'Episode 1$https://upload.wikimedia.org/wikipedia/commons/a/ab/Open_film.webm');
 });

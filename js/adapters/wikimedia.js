@@ -24,6 +24,37 @@
         return { page: number, pageSize: size, offset: (number - 1) * size };
     }
 
+    // File titles contain spaces, punctuation, and sometimes non-ASCII text,
+    // while the site's detail endpoint accepts conservative word-like IDs.
+    // Encode the title into a reversible, URL/query-safe ID and keep accepting
+    // the legacy raw title form for old cached cards.
+    function encodeStablePart(value) {
+        return encodeURIComponent(String(value ?? ''))
+            .replace(/_/g, '_5f')
+            .replace(/\./g, '_2e')
+            .replace(/~/g, '_7e')
+            .replace(/!/g, '_21')
+            .replace(/'/g, '_27')
+            .replace(/\(/g, '_28')
+            .replace(/\)/g, '_29')
+            .replace(/\*/g, '_2a')
+            .replace(/%([0-9a-f]{2})/gi, '_$1');
+    }
+
+    function decodeStablePart(value) {
+        const escaped = String(value ?? '').replace(/_([0-9a-f]{2})/gi, (_, hex) => `%${hex}`);
+        try { return decodeURIComponent(escaped); } catch (_) { return String(value ?? ''); }
+    }
+
+    function stableId(title) {
+        return `wikimedia_${encodeStablePart(title)}`;
+    }
+
+    function titleFromId(value) {
+        const raw = String(value ?? '').trim();
+        return raw.startsWith('wikimedia_') ? decodeStablePart(raw.slice('wikimedia_'.length)) : raw;
+    }
+
     function buildSearchUrl(query, page = 1, pageSize = DEFAULT_PAGE_SIZE) {
         const paging = pageArgs(page, pageSize);
         const term = String(query == null ? '' : query).trim();
@@ -53,7 +84,7 @@
     }
 
     function buildDetailUrl(value) {
-        const title = titleFrom(value);
+        const title = titleFromId(titleFrom(value));
         if (!title) return '';
         const url = new URL(API_BASE_URL);
         url.searchParams.set('action', 'query');
@@ -136,7 +167,7 @@
         const info = media.info;
         const description = descriptionFrom(info);
         return {
-            vod_id: title,
+            vod_id: stableId(title),
             vod_name: title.replace(/^File:/i, ''),
             vod_pic: chooseThumbnail(imageInfo),
             vod_content: description,
@@ -159,7 +190,7 @@
 
     function normalizeDetailResponse(payload, id) {
         const page = pageEntries(payload)[0] || {};
-        const title = titleFrom(page.title) || titleFrom(id);
+        const title = titleFrom(page.title) || titleFromId(id);
         const imageInfo = Array.isArray(page.imageinfo) ? page.imageinfo : [];
         const media = chooseMedia(imageInfo);
         const cover = chooseThumbnail(imageInfo);
@@ -185,7 +216,7 @@
 
     function normalizeDetailMetadata(payload, id) {
         const page = pageEntries(payload)[0] || {};
-        const title = titleFrom(page.title) || titleFrom(id);
+        const title = titleFrom(page.title) || titleFromId(id);
         const imageInfo = Array.isArray(page.imageinfo) ? page.imageinfo : [];
         return {
             title: title.replace(/^File:/i, ''),
