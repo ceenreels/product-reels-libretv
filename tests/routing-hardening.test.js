@@ -154,3 +154,37 @@ test('source statistics failures do not remove an otherwise healthy source from 
   const plan = sandbox.LibretvRouting.buildSourcePlan({ locale: 'en', region: 'GLOBAL_EN', sourceMode: 'aggregated' });
   assert.ok([...plan.primary, ...plan.fallback].includes('archive'));
 });
+
+test('an expanded adapter failure is isolated while another English source returns results', async () => {
+  const sandbox = await loadApi(async input => {
+    const target = String(input);
+    if (target.includes('video.blender.org')) return { ok: false, status: 503, text: async () => '{}' };
+    if (target === 'https://archive.test/search') return { ok: true, text: async () => JSON.stringify({ data: [{ vod_id: 'archive-1', vod_name: 'Archive result' }] }) };
+    return { ok: true, text: async () => JSON.stringify({ list: [] }) };
+  });
+  vm.runInNewContext(`globalThis.VIDEO_SOURCE_ADAPTERS = {
+    archive: {
+      buildSearchUrl: () => 'https://archive.test/search',
+      normalizeSearchResponse: payload => ({ list: payload.data || [] })
+    }
+  };`, sandbox);
+  const payload = JSON.parse(await sandbox.handleApiRequest(new URL('https://jumeitianxia.com/api/search?wd=film&locale=en&region=GLOBAL_EN&sourceMode=aggregated')));
+  assert.equal(payload.code, 200);
+  assert.equal(payload.routing.fellBack, false);
+  assert.deepEqual(payload.routing.usedSources, ['archive']);
+  assert.equal(payload.list[0].source_code, 'archive');
+});
+
+test('manual adapter failures update source health without leaking provider errors', async () => {
+  const sandbox = await loadApi(async () => ({ ok: false, status: 503, text: async () => '{}' }));
+  vm.runInNewContext(`globalThis.VIDEO_SOURCE_ADAPTERS = {
+    archive: {
+      buildSearchUrl: () => 'https://archive.test/search',
+      normalizeSearchResponse: () => ({ list: [] })
+    }
+  };`, sandbox);
+  const payload = JSON.parse(await sandbox.handleApiRequest(new URL('https://jumeitianxia.com/api/search?wd=film&source=archive&sourceMode=manual&locale=en&region=GLOBAL_EN')));
+  assert.equal(payload.code, 400);
+  assert.equal(sandbox.LibretvRouting.isSourceHealthy('archive'), false);
+  assert.doesNotMatch(payload.msg, /undefined|TypeError/);
+});
