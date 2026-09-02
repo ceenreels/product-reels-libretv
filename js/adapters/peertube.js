@@ -257,7 +257,9 @@
         const fetchFn = root.fetch || (typeof fetch === 'function' ? fetch : null);
         if (!fetchFn) throw new Error('fetch unavailable');
         try {
-            const response = await fetchFn(buildSearchUrl('', 1, 1), { signal, headers: { Accept: 'application/json' } });
+            // Sepia Search rejects an empty `search` parameter; use the same
+            // broad English recommendation query to obtain its network total.
+            const response = await fetchFn(buildRecommendationsUrl(1, 1), { signal, headers: { Accept: 'application/json' } });
             if (!response?.ok) throw new Error(`PeerTube stats request failed: ${response?.status || 0}`);
             const payload = await responseJson(response);
             const rawTotal = payload?.total ?? payload?.totalItems ?? payload?.count ?? payload?.data?.total;
