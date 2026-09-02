@@ -85,7 +85,7 @@ test('Internet Archive stats expose authoritative catalog count and non-blocking
 test('PeerTube network adapter preserves instance and UUID while normalizing direct media', async () => {
   const adapter = await loadAdapter('peertube.js', 'PeerTubeAdapter');
   const search = new URL(adapter.buildSearchUrl('open animation', 2, 10));
-  assert.equal(search.origin, 'https://search.joinpeertube.org');
+  assert.equal(search.origin, 'https://sepiasearch.org');
   assert.equal(search.pathname, '/api/v1/search/videos');
   assert.equal(search.searchParams.get('search'), 'open animation');
   assert.equal(search.searchParams.get('start'), '10');

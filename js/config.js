@@ -105,7 +105,7 @@ const API_SITES = {
         stats: { catalogCount: null, playableCount: null, countKind: 'unavailable', sampleSize: 0, updatedAt: '', status: 'unknown' }
     },
     peertube: {
-        api: 'https://search.joinpeertube.org',
+        api: 'https://sepiasearch.org',
         name: 'PeerTube Network',
         adapter: 'peertube',
         languages: ['en'], regions: ['GLOBAL_EN'], priority: 90,
@@ -203,7 +203,7 @@ const SECURITY_CONFIG = {
         'ffzy5.tv',
         'video.blender.org',
         'archive.org',
-        'search.joinpeertube.org',
+        'sepiasearch.org',
         'commons.wikimedia.org',
         'upload.wikimedia.org',
         'images-api.nasa.gov',

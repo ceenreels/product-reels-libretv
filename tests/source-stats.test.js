@@ -106,6 +106,17 @@ test('unknown source stats returns a safe client error', async () => {
   assert.equal(payload.stats.countKind, 'unavailable');
 });
 
+test('source without stats capability returns unavailable without calling adapter', async () => {
+  let calls = 0;
+  const sandbox = await loadApi(async () => ({ ok: true, text: async () => '{}' }));
+  installStatsAdapter(sandbox, async () => { calls += 1; return { catalogCount: 1, status: 'available' }; });
+  vm.runInNewContext("API_SITES.blender.capabilities = { search: true, stats: false };", sandbox);
+  const payload = JSON.parse(await sandbox.handleApiRequest(new URL('https://jumeitianxia.com/api/source-stats?source=blender')));
+  assert.equal(payload.code, 200);
+  assert.equal(payload.stats.countKind, 'unavailable');
+  assert.equal(calls, 0);
+});
+
 test('settings source statistics are lazy and use a six-hour browser cache', async () => {
   const appSource = await readFile(new URL('../js/app.js', import.meta.url), 'utf8');
   const local = new Map();

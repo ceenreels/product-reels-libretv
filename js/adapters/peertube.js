@@ -1,12 +1,12 @@
 // PeerTube network search adapter.
 //
-// Search is delegated to the public joinpeertube.org index. Detail requests
+// Search is delegated to the public Sepia Search index. Detail requests
 // are sent to the originating PeerTube instance, because UUIDs are only
 // unique within that instance's API namespace.
 (function attachPeerTubeAdapter(root) {
     'use strict';
 
-    const SEARCH_BASE_URL = 'https://search.joinpeertube.org';
+    const SEARCH_BASE_URL = 'https://sepiasearch.org';
     const SOURCE_CODE = 'peertube';
     const SOURCE_NAME = 'PeerTube Network';
     const DEFAULT_PAGE_SIZE = 20;
@@ -37,7 +37,10 @@
     function buildRecommendationsUrl(page = 1, pageSize = DEFAULT_PAGE_SIZE) {
         const paging = pageArgs(page, pageSize);
         const url = new URL('/api/v1/search/videos', `${SEARCH_BASE_URL}/`);
-        url.searchParams.set('search', '');
+        // Sepia Search requires a non-empty search term. "video" is a
+        // broad, deterministic query used only for the recommendation feed;
+        // search results still use the user's exact query above.
+        url.searchParams.set('search', 'video');
         url.searchParams.set('start', String(paging.start));
         url.searchParams.set('count', String(paging.pageSize));
         url.searchParams.set('sort', '-publishedAt');

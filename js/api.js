@@ -116,6 +116,11 @@ async function getSourceStats(source) {
         sourceStatsCache.set(source, { stats, timestamp: Date.now() });
         return stats;
     }
+    if (site.capabilities && site.capabilities.stats === false) {
+        const stats = unavailableSourceStats('error');
+        sourceStatsCache.set(source, { stats, timestamp: Date.now() });
+        return stats;
+    }
 
     const adapter = getSourceAdapter(source);
     if (!adapter || typeof adapter.getStats !== 'function') {
