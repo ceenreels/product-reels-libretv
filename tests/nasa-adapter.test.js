@@ -3,13 +3,25 @@ import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import vm from 'node:vm';
 
-const loadAdapter = async () => {
-  const sandbox = { console, URL, URLSearchParams };
+const loadAdapter = async fetchImpl => {
+  const sandbox = { console, URL, URLSearchParams, fetch: fetchImpl };
   sandbox.globalThis = sandbox;
   const source = await readFile(new URL('../js/adapters/nasa.js', import.meta.url), 'utf8');
   vm.runInNewContext(source, sandbox, { filename: 'js/adapters/nasa.js' });
   return sandbox.NasaAdapter;
 };
+
+test('NASA stats expose the collection total without blocking on playable sampling', async () => {
+  const adapter = await loadAdapter(async () => ({
+    ok: true,
+    text: async () => JSON.stringify({ collection: { metadata: { total_hits: 6543 }, items: [] } })
+  }));
+  const stats = await adapter.getStats();
+  assert.equal(stats.catalogCount, 6543);
+  assert.equal(stats.playableCount, null);
+  assert.equal(stats.countKind, 'estimated');
+  assert.equal(stats.status, 'available');
+});
 
 test('buildSearchUrl creates a bounded NASA video search request', async () => {
   const adapter = await loadAdapter();

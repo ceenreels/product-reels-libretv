@@ -244,6 +244,42 @@
         };
     }
 
+    async function responseJson(response) {
+        if (response && typeof response.json === 'function') return response.json();
+        return JSON.parse(await response.text());
+    }
+
+    async function getStats({ signal } = {}) {
+        const fetchFn = (typeof globalThis !== 'undefined' && globalThis.fetch)
+            || (typeof fetch === 'function' ? fetch : null);
+        if (!fetchFn) throw new Error('fetch unavailable');
+        try {
+            const response = await fetchFn(buildSearchUrl('', 1, 1), { signal, headers: { Accept: 'application/json' } });
+            if (!response?.ok) throw new Error(`NASA stats request failed: ${response?.status || 0}`);
+            const payload = await responseJson(response);
+            const total = Number(payload?.collection?.metadata?.total_hits ?? payload?.collection?.metadata?.totalHits ?? payload?.total);
+            if (!Number.isFinite(total)) throw new Error('NASA stats total missing');
+            return {
+                catalogCount: Math.max(0, total),
+                playableCount: null,
+                countKind: 'estimated',
+                updatedAt: new Date().toISOString(),
+                sampleSize: 0,
+                status: 'available'
+            };
+        } catch (error) {
+            return {
+                catalogCount: null,
+                playableCount: null,
+                countKind: 'unavailable',
+                updatedAt: new Date().toISOString(),
+                sampleSize: 0,
+                status: 'error',
+                error: error?.message || 'stats unavailable'
+            };
+        }
+    }
+
     return {
         BASE_URL: API_BASE,
         API_BASE_URL: API_BASE,
@@ -259,6 +295,8 @@
         normalizeSearchResponse,
         normalizeDetailResponse,
         normalizeDetailMetadata,
+        getStats,
+        isPlayableUrl: value => /^https:\/\/[^\s]+\.(?:mp4|webm|m3u8)(?:[?#]|$)/i.test(String(value || '')),
         toStableId,
         fromStableId
     };

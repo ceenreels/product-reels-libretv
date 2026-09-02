@@ -9,13 +9,25 @@ const assertJsonEqual = (actual, expected) => {
   assert.deepEqual(JSON.parse(JSON.stringify(actual)), expected);
 };
 
-async function loadAdapter() {
-  const sandbox = { URL, URLSearchParams, console };
+async function loadAdapter(fetchImpl) {
+  const sandbox = { URL, URLSearchParams, console, fetch: fetchImpl };
   sandbox.globalThis = sandbox;
   const source = await readFile(new URL('js/adapters/blender.js', repoRoot), 'utf8');
   vm.runInNewContext(source, sandbox, { filename: 'js/adapters/blender.js' });
   return sandbox.BlenderAdapter;
 }
+
+test('Blender stats expose the PeerTube catalog total without blocking on playable sampling', async () => {
+  const adapter = await loadAdapter(async () => ({
+    ok: true,
+    text: async () => JSON.stringify({ total: 54321, data: [] })
+  }));
+  const stats = await adapter.getStats();
+  assert.equal(stats.catalogCount, 54321);
+  assert.equal(stats.playableCount, null);
+  assert.equal(stats.countKind, 'estimated');
+  assert.equal(stats.status, 'available');
+});
 
 test('builds PeerTube search, recommendations, and detail URLs', async () => {
   const adapter = await loadAdapter();

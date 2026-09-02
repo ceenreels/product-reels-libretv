@@ -198,6 +198,41 @@
         return normalized;
     }
 
+    async function responseJson(response) {
+        if (response && typeof response.json === 'function') return response.json();
+        return JSON.parse(await response.text());
+    }
+
+    async function getStats({ signal } = {}) {
+        const fetchFn = root.fetch || (typeof fetch === 'function' ? fetch : null);
+        if (!fetchFn) throw new Error('fetch unavailable');
+        try {
+            const response = await fetchFn(buildRecommendationsUrl(1, 1), { signal, headers: { Accept: 'application/json' } });
+            if (!response?.ok) throw new Error(`Blender stats request failed: ${response?.status || 0}`);
+            const payload = await responseJson(response);
+            const total = Number(payload?.total ?? payload?.totalItems ?? payload?.count);
+            if (!Number.isFinite(total)) throw new Error('Blender stats total missing');
+            return {
+                catalogCount: Math.max(0, total),
+                playableCount: null,
+                countKind: 'estimated',
+                updatedAt: new Date().toISOString(),
+                sampleSize: 0,
+                status: 'available'
+            };
+        } catch (error) {
+            return {
+                catalogCount: null,
+                playableCount: null,
+                countKind: 'unavailable',
+                updatedAt: new Date().toISOString(),
+                sampleSize: 0,
+                status: 'error',
+                error: error?.message || 'stats unavailable'
+            };
+        }
+    }
+
     const adapter = {
         BASE_URL,
         API_BASE_URL,
@@ -210,6 +245,8 @@
         toVideoItem,
         normalizeSearchResponse,
         normalizeDetailResponse,
+        getStats,
+        isPlayableUrl: value => /^https:\/\/[^\s]+\.(?:mp4|webm|m3u8)(?:[?#]|$)/i.test(String(value || '')),
     };
 
     root.BlenderAdapter = adapter;
