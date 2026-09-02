@@ -156,6 +156,7 @@ test('dynamic UI messages and noEligibleSources keys exist in all locales', asyn
 test('settings exposes lazy source statistics without changing existing storage namespaces', () => {
   assert.match(indexSource, /id="sourceStatsList"/);
   assert.match(indexSource, /data-i18n="sourceStats"/);
+  assert.match(indexSource, /settings-panel[^\"]*overflow-y-auto/);
   assert.match(appSource, /libretv:sourceStats:/);
   assert.match(appSource, /function\s+loadSourceStats/);
   assert.match(uiSource, /loadSourceStats\(\)/);

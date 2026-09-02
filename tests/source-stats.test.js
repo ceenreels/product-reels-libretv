@@ -131,7 +131,7 @@ test('settings source statistics are lazy and use a six-hour browser cache', asy
     AbortController,
     fetch: async () => {
       fetchCalls += 1;
-      return { ok: true, json: async () => ({ code: 200, source: 'blender', stats: { catalogCount: 4, playableCount: 3, countKind: 'authoritative', status: 'available', updatedAt: new Date().toISOString() } }) };
+      return { ok: true, json: async () => ({ code: 200, source: 'blender', stats: { catalogCount: 4, playableCount: null, countKind: 'estimated', status: 'available', updatedAt: new Date().toISOString() } }) };
     },
     navigator: { languages: ['en-US'] },
     location: { search: '', href: 'https://jumeitianxia.com/' },
@@ -159,6 +159,7 @@ test('settings source statistics are lazy and use a six-hour browser cache', asy
   assert.equal(fetchCalls, 1, 'fresh localStorage stats should be reused');
   assert.match(container.innerHTML, /Blender/);
   assert.match(container.innerHTML, /4/);
+  assert.match(container.innerHTML, /estimate|about/i);
 });
 
 test('settings panel triggers source stats only when opened', async () => {
