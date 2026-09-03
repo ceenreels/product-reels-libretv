@@ -65,6 +65,64 @@ test('legacy recommendation candidates stay isolated to active route', async () 
   assert.deepEqual(Array.from(sandbox.getLegacyRecommendationSources({ source: 'ffzy', sourceMode: 'manual', plan: { primary: [], fallback: [] } })), ['ffzy']);
 });
 
+test('source selector only exposes sources matching the selected language', async () => {
+  const createHarness = async locale => {
+    const local = new Map([
+      ['libretv:locale', locale],
+      ['currentApiSource', 'aggregated'],
+      ['libretv:sourceMode', 'aggregated']
+    ]);
+    const select = {
+      _options: [],
+      _value: '',
+      get options() { return this._options; },
+      set innerHTML(value) { this._html = value; this._options = []; },
+      get innerHTML() { return this._html || ''; },
+      appendChild(option) { this._options.push(option); },
+      set value(value) { this._value = value; },
+      get value() { return this._value; }
+    };
+    const document = {
+      addEventListener() {},
+      getElementById: id => id === 'apiSource' ? select : null,
+      querySelector() { return null; },
+      querySelectorAll() { return []; },
+      createElement() { return { dataset: {}, value: '', textContent: '' }; }
+    };
+    const sandbox = await load(appSource, {
+      document,
+      localStorage: { getItem: key => local.get(key) ?? null, setItem: (key, value) => local.set(key, String(value)), removeItem: key => local.delete(key) },
+      DEFAULT_API_SOURCE: 'zh-one',
+      API_SITES: {
+        'zh-one': { name: '中文源一', languages: ['zh-CN'], enabled: true },
+        'zh-two': { name: '中文源二', languages: ['zh-TW'], enabled: true },
+        english: { name: 'English source', languages: ['en'], enabled: true },
+        disabledZh: { name: 'Disabled Chinese', languages: ['zh-CN'], enabled: false }
+      },
+      LibretvI18n: {
+        t: (key, activeLocale, fallback) => {
+          if (key === 'aggregatedLanguage') return String(activeLocale).startsWith('zh') ? '聚合搜索（中文源）' : 'Aggregated search (English sources)';
+          return fallback || key;
+        },
+        apply() {},
+        resolveLocale: ({ storedLocale }) => storedLocale || locale,
+        resolveRegion: ({ storedRegion }) => storedRegion || 'GLOBAL_ZH'
+      }
+    });
+    return { sandbox, select };
+  };
+
+  const chinese = await createHarness('zh-CN');
+  chinese.sandbox.populateApiSourceOptions();
+  assert.deepEqual(chinese.select.options.map(option => option.value), ['aggregated', 'zh-one', 'zh-two']);
+  assert.equal(chinese.select.options[0].textContent, '聚合搜索（中文源）');
+
+  const english = await createHarness('en');
+  english.sandbox.populateApiSourceOptions();
+  assert.deepEqual(english.select.options.map(option => option.value), ['aggregated', 'english']);
+  assert.equal(english.select.options[0].textContent, 'Aggregated search (English sources)');
+});
+
 test('external settings close synchronizes aria-hidden', async () => {
   assert.match(appSource, /panel\.classList\.remove\(['"]show['"]\);[\s\S]{0,120}panel\.setAttribute\(['"]aria-hidden['"],\s*['"]true['"]\)/);
 });

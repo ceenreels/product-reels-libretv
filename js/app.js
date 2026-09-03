@@ -46,6 +46,17 @@ function sourceMatchesLocale(source, locale) {
     return languages.some(language => String(language).toLowerCase().slice(0, 2) === prefix);
 }
 
+function getLanguageSourceIds(locale = currentLocale) {
+    if (typeof API_SITES === 'undefined' || !API_SITES) return [];
+    return Object.entries(API_SITES)
+        .filter(([id, site]) => site && site.enabled !== false && sourceMatchesLocale(id, locale))
+        .map(([id]) => id);
+}
+
+function isVisibleSourceSelection(source, locale = currentLocale) {
+    return source === 'aggregated' || source === 'region' || getLanguageSourceIds(locale).includes(source);
+}
+
 function resolveInitialSourceMode({ storedMode = '', storedSource = '', locale = '' } = {}) {
     if (['manual', 'aggregated', 'region', 'custom'].includes(storedMode)) return storedMode;
     return hasUsableApiSource(storedSource) && sourceMatchesLocale(storedSource, locale) ? 'manual' : 'region';
@@ -218,14 +229,19 @@ function populateApiSourceOptions() {
     if (!select || typeof API_SITES === 'undefined') return;
     const selected = currentApiSource;
     select.innerHTML = '';
-    [['region','regionalRecommendation'],['aggregated','aggregated'],['custom','customApi']].forEach(([value,key]) => {
-        const option = document.createElement('option'); option.value = value; option.dataset.i18n = key; option.textContent = LibretvI18n?.t(key, currentLocale) || value; select.appendChild(option);
+    const aggregateOption = document.createElement('option');
+    aggregateOption.value = 'aggregated';
+    aggregateOption.dataset.i18n = 'aggregatedLanguage';
+    aggregateOption.textContent = LibretvI18n?.t('aggregatedLanguage', currentLocale, 'Aggregated search (language sources)') || 'Aggregated search (language sources)';
+    select.appendChild(aggregateOption);
+    getLanguageSourceIds().forEach(id => {
+        const site = API_SITES[id];
+        const option = document.createElement('option');
+        option.value = id;
+        option.textContent = `${site.name || id} (${id})`;
+        select.appendChild(option);
     });
-    Object.entries(API_SITES).forEach(([id, site]) => {
-        if (site && site.enabled === false) return;
-        const option = document.createElement('option'); option.value = id; option.textContent = `${site.name || id} (${id})`; select.appendChild(option);
-    });
-    select.value = Array.from(select.options).some(o => o.value === selected) ? selected : (sourceMode === 'region' ? 'region' : DEFAULT_API_SOURCE);
+    select.value = Array.from(select.options).some(o => o.value === selected) ? selected : 'aggregated';
 }
 
 // 页面初始化
@@ -237,6 +253,10 @@ document.addEventListener('DOMContentLoaded', function() {
     sourceMode = resolveInitialSourceMode({ storedMode: sourceMode, storedSource: storedApiSource, locale: currentLocale });
     if (sourceMode === 'region' || sourceMode === 'aggregated' || sourceMode === 'custom') currentApiSource = sourceMode;
     if (sourceMode === 'manual' && !hasUsableApiSource(currentApiSource)) currentApiSource = DEFAULT_API_SOURCE;
+    if (sourceMode === 'custom' || (sourceMode === 'manual' && !isVisibleSourceSelection(currentApiSource, currentLocale))) {
+        currentApiSource = 'aggregated';
+        sourceMode = 'aggregated';
+    }
     localStorage.setItem('libretv:locale', currentLocale); localStorage.setItem('libretv:region', currentRegion); localStorage.setItem('libretv:sourceMode', sourceMode);
     LibretvI18n?.apply(document, currentLocale);
     populateApiSourceOptions();
@@ -251,7 +271,7 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 
     // 设置 select 的默认选中值
-    document.getElementById('apiSource').value = sourceMode === 'region' ? 'region' : currentApiSource;
+    document.getElementById('apiSource').value = sourceMode === 'region' ? 'aggregated' : currentApiSource;
 
     // 初始化显示当前站点代码
     document.getElementById('currentCode').textContent = currentApiSource;
@@ -735,11 +755,19 @@ function setupEventListeners() {
     document.getElementById('localeSelect')?.addEventListener('change', e => {
         invalidateSearchRequests();
         currentLocale = e.target.value;
+        if (sourceMode === 'custom' || (sourceMode === 'manual' && !isVisibleSourceSelection(currentApiSource, currentLocale))) {
+            currentApiSource = 'aggregated';
+            sourceMode = 'aggregated';
+        }
         localStorage.setItem('libretv:locale', currentLocale);
         localStorage.setItem('libretv:sourceMode', sourceMode);
         localStorage.setItem('currentApiSource', currentApiSource);
         LibretvI18n?.apply(document, currentLocale);
         populateApiSourceOptions();
+        const modeEl = document.getElementById('sourceModeSelect');
+        if (modeEl) modeEl.value = sourceMode;
+        const apiEl = document.getElementById('apiSource');
+        if (apiEl) apiEl.value = sourceMode === 'region' ? 'aggregated' : currentApiSource;
         updateMetadata();
         updateRouteStatus();
         resetSearchArea();
@@ -765,6 +793,10 @@ function setupEventListeners() {
     // API源选择变更事件
     document.getElementById('apiSource').addEventListener('change', async function(e) {
         invalidateSearchRequests(); currentApiSource = e.target.value;
+        if (currentApiSource !== 'region' && currentApiSource !== 'aggregated' && currentApiSource !== 'custom' && !isVisibleSourceSelection(currentApiSource, currentLocale)) {
+            currentApiSource = 'aggregated';
+            e.target.value = currentApiSource;
+        }
         if (currentApiSource === 'region') { sourceMode='region'; document.getElementById('customApiInput')?.classList.add('hidden'); localStorage.setItem('libretv:sourceMode',sourceMode); localStorage.setItem('currentApiSource', currentApiSource); updateRouteStatus(); resetSearchArea(); recommendationPage=1; loadRecommendations(); return; }
         sourceMode = currentApiSource === 'aggregated' ? 'aggregated' : currentApiSource === 'custom' ? 'custom' : 'manual';
         localStorage.setItem('libretv:sourceMode', sourceMode); const modeEl=document.getElementById('sourceModeSelect'); if(modeEl) modeEl.value=sourceMode;
