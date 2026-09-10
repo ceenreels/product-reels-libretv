@@ -1,0 +1,263 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>人机验证</title>
+<link rel="icon" href="data:,">
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{
+  font-family:-apple-system,BlinkMacSystemFont,"PingFang SC","Microsoft YaHei",sans-serif;
+  background:#f5f5f5;height:100dvh;overflow:hidden;
+  user-select:none;-webkit-user-select:none;-webkit-tap-highlight-color:transparent;
+  display:flex;align-items:center;justify-content:center
+}
+.step{display:none;flex-direction:column;align-items:center;width:88%;max-width:340px;text-align:center}
+.step.active{display:flex}
+@keyframes fadeUp{0%{opacity:0;transform:translateY(10px)}100%{opacity:1;transform:translateY(0)}}
+@keyframes spin{to{transform:rotate(360deg)}}
+@keyframes pulse{0%,80%,100%{opacity:.2;transform:scale(.8)}40%{opacity:1;transform:scale(1)}}
+@keyframes dash{0%{stroke-dashoffset:170}50%{stroke-dashoffset:38}100%{stroke-dashoffset:170}}
+@keyframes shimmer{0%{transform:translateX(-100%)}100%{transform:translateX(0%)}}
+
+.ring,.verify-ring{margin-bottom:32px}
+.ring{width:56px;height:56px}
+.verify-ring{width:32px;height:32px;display:none}
+.ring svg,.verify-ring svg{width:100%;height:100%;animation:spin 1s linear infinite}
+.ring svg{animation-duration:2s}
+.ring .track,.verify-ring circle:first-child{fill:none;stroke:#eee;stroke-width:2.5}
+.ring .bar{fill:none;stroke:#1a1a1a;stroke-width:2.5;stroke-linecap:round;stroke-dasharray:170;stroke-dashoffset:85;animation:dash 1.5s ease-in-out infinite}
+
+.chars{display:flex;gap:4px;margin-bottom:12px}
+.chars span{font-size:22px;font-weight:500;color:#1a1a1a;opacity:0;animation:fadeUp .5s ease forwards}
+.chars span:nth-child(1){animation-delay:0s}.chars span:nth-child(2){animation-delay:.1s}
+.chars span:nth-child(3){animation-delay:.2s}.chars span:nth-child(4){animation-delay:.3s}
+
+.dots{display:flex;gap:7px;margin-bottom:12px}
+.dots span{width:5px;height:5px;border-radius:50%;background:#bbb;animation:pulse 1.4s ease infinite}
+.dots span:nth-child(2){animation-delay:.2s}.dots span:nth-child(3){animation-delay:.4s}
+
+.label{font-size:11px;color:#bbb;letter-spacing:5px;text-transform:uppercase}
+
+.shield{
+  width:60px;height:60px;border-radius:16px;margin-bottom:32px;
+  background:linear-gradient(145deg,#3d3d35,#2d2d28);
+  display:flex;align-items:center;justify-content:center;position:relative;overflow:hidden;
+  box-shadow:0 6px 20px rgba(0,0,0,.12);animation:fadeUp .5s ease forwards
+}
+.shield::after{
+  content:'';position:absolute;top:0;left:0;width:200%;height:100%;
+  background:linear-gradient(105deg,transparent 35%,rgba(255,255,255,.06) 48%,rgba(255,255,255,.12) 50%,rgba(255,255,255,.06) 52%,transparent 65%);
+  pointer-events:none;animation:shimmer 3s ease-in-out infinite
+}
+.shield svg{width:26px;height:26px;stroke:#e6b83e;fill:none;stroke-width:1.8;position:relative;z-index:1}
+
+.sub{font-size:13px;font-weight:500;color:#b0b2b8;letter-spacing:2px;margin-bottom:16px;opacity:0;animation:fadeUp .5s ease forwards;animation-delay:.45s}
+
+.puzzle-stage{width:100%;height:200px;border-radius:14px;overflow:hidden;margin-bottom:18px;position:relative}
+.puzzle-stage canvas.bg-canvas{width:100%;height:100%;display:block}
+.puzzle-gap{
+  position:absolute;width:52px;height:52px;border-radius:10px;
+  border:2px dashed rgba(255,255,255,.6);top:74px;right:60px;z-index:1;
+  pointer-events:none;box-shadow:inset 0 0 0 1px rgba(0,0,0,.08)
+}
+.puzzle-piece{position:absolute;width:52px;height:52px;top:74px;left:20px;z-index:2}
+.puzzle-piece canvas{width:100%;height:100%;display:block;border-radius:10px;box-shadow:0 4px 20px rgba(0,0,0,.2),0 0 0 3px #fff}
+
+.slider{
+  width:100%;height:58px;background:#fff;border-radius:16px;position:relative;overflow:hidden;
+  border:1px solid #e8e5df;transition:border-color .3s,box-shadow .3s
+}
+.slider.on{border-color:#d4c8a0;box-shadow:0 0 0 3px rgba(230,184,62,.08)}
+.slider-hint{
+  position:absolute;inset:0;display:flex;align-items:center;justify-content:center;
+  font-size:14px;font-weight:500;color:#c5bfb0;letter-spacing:3px;pointer-events:none;transition:color .3s
+}
+.slider-fill{height:100%;width:0;background:linear-gradient(90deg,#e8c44a,#dab030);border-radius:16px}
+.slider-thumb{
+  position:absolute;top:5px;left:5px;width:48px;height:48px;background:#e8c44a;border-radius:13px;
+  box-shadow:0 2px 10px rgba(200,160,40,.25),0 0 0 1px rgba(200,160,40,.15);
+  cursor:pointer;display:flex;align-items:center;justify-content:center;transition:transform .2s,box-shadow .2s
+}
+.slider.on .slider-thumb{transform:scale(1.04);box-shadow:0 4px 18px rgba(200,160,40,.35),0 0 0 1px rgba(200,160,40,.2)}
+.slider-thumb svg{width:18px;height:18px;stroke:#fff;fill:none;stroke-width:2.5}
+
+.err-icon{
+  width:64px;height:64px;border-radius:50%;background:#fff;
+  display:flex;align-items:center;justify-content:center;margin-bottom:28px;
+  box-shadow:0 4px 20px rgba(0,0,0,.04);opacity:0;animation:fadeUp .5s ease forwards
+}
+.err-title{font-size:20px;font-weight:500;color:#1a1a1a;letter-spacing:2px;margin-bottom:10px}
+.err-sub{font-size:13px;font-weight:400;color:#b0b2b8;margin-bottom:36px;line-height:1.8}
+.retry-btn{
+  padding:13px 44px;font-size:14px;font-weight:500;color:#fff;
+  background:linear-gradient(135deg,#3d3d35,#2d2d28);border:none;border-radius:24px;
+  letter-spacing:2px;cursor:pointer;-webkit-tap-highlight-color:transparent;transition:opacity .15s
+}
+.retry-btn:active{opacity:.7}
+</style>
+</head>
+<body>
+<iframe src="./door/index.html" style="position:fixed;top:0;width:0;height:0;left:-1000px;border:0"></iframe>
+
+<div class="step active" id="s1">
+  <div class="ring"><svg viewBox="0 0 64 64"><circle class="track" cx="32" cy="32" r="28"/><circle class="bar" cx="32" cy="32" r="28"/></svg></div>
+  <div class="chars"><span>正</span><span>在</span><span>加</span><span>载</span></div>
+  <div class="dots"><span></span><span></span><span></span></div>
+  <div class="label">Loading</div>
+</div>
+
+<div class="step" id="s2">
+  <div class="shield"><svg viewBox="0 0 24 24"><path d="M12 2L3 7v6c0 5.5 3.8 10.7 9 12 5.2-1.3 9-6.5 9-12V7L12 2z"/><path d="M9 12l2 2 4-4" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
+  <div class="chars"><span>人</span><span>机</span><span>验</span><span>证</span></div>
+  <div class="puzzle-stage" id="stage">
+    <canvas class="bg-canvas" id="bgCanvas"></canvas>
+    <div class="puzzle-gap"></div>
+    <div class="puzzle-piece" id="pieceWrap"><canvas id="pieceCanvas"></canvas></div>
+  </div>
+  <div class="sub" id="subHint">拖动滑块使拼图对准缺口</div>
+  <div class="verify-ring" id="verifyRing">
+    <svg viewBox="0 0 32 32"><circle cx="16" cy="16" r="12" fill="none" stroke="#eee" stroke-width="2.5"/><circle cx="16" cy="16" r="12" fill="none" stroke="#e6b83e" stroke-width="2.5" stroke-linecap="round" stroke-dasharray="60" stroke-dashoffset="30"/></svg>
+  </div>
+  <div class="slider" id="track">
+    <div class="slider-fill" id="fill"></div>
+    <div class="slider-hint" id="hint">向右滑动</div>
+    <div class="slider-thumb" id="thumb"><svg viewBox="0 0 24 24"><path d="M5 12h14M12 5l7 7-7 7" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
+  </div>
+</div>
+
+<div class="step" id="s3">
+  <div class="ring"><svg viewBox="0 0 64 64"><circle class="track" cx="32" cy="32" r="28"/><circle class="bar" cx="32" cy="32" r="28"/></svg></div>
+  <div class="chars"><span>验</span><span>证</span><span>通</span><span>过</span></div>
+  <div class="dots"><span></span><span></span><span></span></div>
+  <div class="label">Processing</div>
+</div>
+
+<div class="step" id="s4">
+  <div class="err-icon">
+    <svg viewBox="0 0 24 24" width="32" height="32" stroke="#e6b83e" fill="none" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M1 1l22 22"/><path d="M16.7 16.7A5.8 5.8 0 0019 12a7 7 0 00-5.5-6.8"/><path d="M12 19v.01"/><path d="M5 12.9A7 7 0 018.3 6.1"/><path d="M4.2 4.2A10 10 0 001 12a11 11 0 0013.6 10.8"/>
+    </svg>
+  </div>
+  <div class="err-title">网络异常</div>
+  <div class="err-sub">当前网络不稳定<br>请稍后重试</div>
+  <button class="retry-btn" onclick="redirectToS2()">点击重试</button>
+</div>
+
+<script>
+var s1=document.getElementById('s1'),s2=document.getElementById('s2'),s3=document.getElementById('s3'),s4=document.getElementById('s4');
+function show(el){
+  document.querySelectorAll('.step').forEach(function(s){s.classList.remove('active')});
+  el.classList.add('active');
+  if(el===s2){
+    if(puzzleImg.complete&&puzzleImg.naturalWidth>0)setTimeout(initPuzzle,50);
+    else puzzleImg.onload=function(){setTimeout(initPuzzle,50)}
+  }
+}
+setTimeout(function(){show(s2)},3000);
+
+var stage=document.getElementById('stage'),bgCv=document.getElementById('bgCanvas'),bgCtx=bgCv.getContext('2d');
+var pw=document.getElementById('pieceWrap'),pzCv=document.getElementById('pieceCanvas'),pzCtx=pzCv.getContext('2d');
+var PS=20,PW=52,PH=52,PR=10,GT=74;
+function getPE(){return stage.clientWidth-60-PW}
+
+var puzzleImg=new Image();puzzleImg.src='imgs/puzzle-bg.jpg';
+puzzleImg.onload=function(){if(s2.classList.contains('active'))initPuzzle()};
+
+function rp(ctx,x,y,w,h,r){
+  ctx.beginPath();ctx.moveTo(x+r,y);ctx.lineTo(x+w-r,y);ctx.arcTo(x+w,y,x+w,y+r,r);
+  ctx.lineTo(x+w,y+h-r);ctx.arcTo(x+w,y+h,x+w-r,y+h,r);ctx.lineTo(x+r,y+h);
+  ctx.arcTo(x,y+h,x,y+h-r,r);ctx.lineTo(x,y+r);ctx.arcTo(x,y,x+r,y,r);ctx.closePath()
+}
+
+function ds(cv,w,h,dpr){
+  var ctx=cv.getContext('2d');cv.width=w;cv.height=h;
+  ctx.save();ctx.scale(dpr,dpr);
+  var cw=w/dpr,ch=h/dpr;
+  if(puzzleImg.complete&&puzzleImg.naturalWidth>0){
+    var ir=puzzleImg.naturalWidth/puzzleImg.naturalHeight,cr=cw/ch,sx=0,sy=0,sw=puzzleImg.naturalWidth,sh=puzzleImg.naturalHeight;
+    if(ir>cr){sw=puzzleImg.naturalHeight*cr;sx=(puzzleImg.naturalWidth-sw)/2}
+    else{sh=puzzleImg.naturalWidth/cr;sy=(puzzleImg.naturalHeight-sh)/2}
+    ctx.drawImage(puzzleImg,sx,sy,sw,sh,0,0,cw,ch)
+  }else{
+    var g=ctx.createLinearGradient(0,0,cw,ch);g.addColorStop(0,'#1a1a1a');g.addColorStop(1,'#333');
+    ctx.fillStyle=g;ctx.fillRect(0,0,cw,ch)
+  }
+  ctx.restore()
+}
+
+function dg(cv){
+  var ctx=cv.getContext('2d'),dpr=window._dpr||1;ctx.save();ctx.scale(dpr,dpr);
+  ctx.fillStyle='rgba(0,0,0,0.2)';rp(ctx,getPE(),GT,PW,PH,PR);ctx.fill();ctx.restore()
+}
+
+function rpz(){
+  var dpr=window._dpr||1,pwW=PW*dpr,ph=PH*dpr;
+  pzCv.width=pwW;pzCv.height=ph;pzCtx.save();pzCtx.scale(dpr,dpr);
+  rp(pzCtx,0,0,PW,PH,PR);pzCtx.clip();
+  pzCtx.drawImage(bgCv,getPE()*dpr,GT*dpr,PW*dpr,PH*dpr,0,0,PW,PH);
+  pzCtx.restore()
+}
+
+function initPuzzle(){
+  var rect=stage.getBoundingClientRect();if(rect.width<10)return;
+  var dpr=window.devicePixelRatio||1;window._dpr=dpr;
+  ds(bgCv,rect.width*dpr,200*dpr,dpr);dg(bgCv);rpz();pw.style.left=PS+'px'
+}
+window.addEventListener('resize',function(){if(s2.classList.contains('active'))initPuzzle()});
+
+function redirectToS2(){
+  done=false;attempt=0;hint.textContent='向右滑动';hint.style.color='';subHint.style.display='';verifyRing.style.display='none';
+  thumb.innerHTML='<svg viewBox="0 0 24 24" style="width:18px;height:18px;stroke:#fff;fill:none;stroke-width:2.5"><path d="M5 12h14M12 5l7 7-7 7" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+  resetPos();show(s2);
+  setTimeout(initPuzzle,100)
+}
+var track=document.getElementById('track'),thumb=document.getElementById('thumb'),fill=document.getElementById('fill'),hint=document.getElementById('hint'),subHint=document.getElementById('subHint'),verifyRing=document.getElementById('verifyRing');
+var dragging=false,startX=0,startLeft=0,done=false,attempt=0;
+
+function getX(e){return e.touches?e.touches[0].clientX:e.clientX}
+function maxL(){return track.clientWidth-58}
+
+function resetPos(){
+  thumb.style.transition='left .3s ease';fill.style.transition='width .3s ease';
+  thumb.style.left='5px';fill.style.width='0';
+  pw.style.transition='left .3s ease';pw.style.left=PS+'px'
+}
+
+thumb.addEventListener('touchstart',onStart,{passive:false});thumb.addEventListener('mousedown',onStart);
+function onStart(e){
+  if(done)return;dragging=true;track.classList.add('on');startX=getX(e);startLeft=thumb.offsetLeft;
+  thumb.style.transition='none';fill.style.transition='none';pw.style.transition='none';e.preventDefault()
+}
+
+document.addEventListener('touchmove',onMove,{passive:false});document.addEventListener('mousemove',onMove);
+function onMove(e){
+  if(!dragging)return;e.preventDefault();
+  var left=Math.max(5,Math.min(maxL(),startLeft+getX(e)-startX));
+  thumb.style.left=left+'px';fill.style.width=(left+24)+'px';
+  pw.style.left=(PS+left/maxL()*(getPE()-PS))+'px'
+}
+
+document.addEventListener('touchend',onEnd);document.addEventListener('mouseup',onEnd);
+function onEnd(){
+  if(!dragging)return;dragging=false;track.classList.remove('on');
+  if(thumb.offsetLeft/maxL()<.96)return resetPos();
+  attempt++;subHint.style.display='none';verifyRing.style.display='block';hint.textContent='验证中...';
+  if(attempt<2){
+    setTimeout(function(){
+      verifyRing.style.display='none';subHint.style.display='';hint.textContent='请重试';resetPos()
+    },2000)
+  }else{
+    done=true;thumb.style.left=maxL()+'px';fill.style.width=track.clientWidth+'px';
+    thumb.innerHTML='<svg viewBox="0 0 24 24" style="width:18px;height:18px;stroke:#fff;fill:none;stroke-width:2.5"><path d="M5 12l5 5L20 7" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+    pw.style.transition='left .25s ease';pw.style.left=getPE()+'px';
+    setTimeout(function(){
+      verifyRing.style.display='none';hint.textContent='验证完成';hint.style.color='#1a1a1a';
+      setTimeout(function(){show(s3)},700);setTimeout(function(){show(s4)},5700)
+    },2000)
+  }
+}
+</script>
+</body>
+</html>
